@@ -31,7 +31,7 @@ static const std::array<uint8_t, 4> queryFooter = {
 static const std::string queryName = "_googlecast._tcp.local.";
 static const std::vector<std::string> queryNameComponents = {
     //pre-split for convenience
-    "_googlecast", "_tcp ", "local", ""
+    "_googlecast", "_tcp", "local", ""
 };
 
 
