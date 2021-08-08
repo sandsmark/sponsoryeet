@@ -19,6 +19,7 @@ extern "C" {
 #include <chrono>
 
 #include "mdns.h"
+#include "connection.h"
 
 
 void signalHandler(int sig)
@@ -49,6 +50,7 @@ int main(int argc, char *argv[])
         std::cout << "Failed to find a chromecast" << std::endl;
         return 3;
     }
+    address.sin_port = 8009;
     std::cout << "Found chromecast: " << inet_ntoa(address.sin_addr) << std::endl;
 
     return 0;

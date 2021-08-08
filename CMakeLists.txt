@@ -4,6 +4,7 @@ project(sponsoryeet)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+find_package(OpenSSL REQUIRED)
 
 find_package(Protobuf REQUIRED)
 protobuf_generate_cpp(protobufs_SRC protobufs_HDR
@@ -15,4 +16,4 @@ add_executable(sponsoryeet
     ${protobufs_HDR}
     )
 
-target_link_libraries(sponsoryeet protobuf::libprotobuf)
+target_link_libraries(sponsoryeet protobuf::libprotobuf OpenSSL::SSL)
