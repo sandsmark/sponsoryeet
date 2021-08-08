@@ -3,6 +3,7 @@ extern "C" {
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <unistd.h>
+#include <signal.h>
 }
 
 #include <cstdio>
@@ -34,6 +35,13 @@ static const std::vector<std::string> queryNameComponents = {
     "_googlecast", "_tcp", "local", ""
 };
 
+static bool s_running = true;
+
+void signalHandler(int sig)
+{
+    signal(sig, SIG_DFL);
+    s_running = false;
+}
 
 int openSocket()
 {
@@ -142,12 +150,12 @@ std::string parsePacket(const std::string &data)
     }
     int pos = queryHeader.size();
 
+    // No answers in packet
+    if (data[6] == 0 && data[7] == 0) {
+        return "";
+    }
+
     std::string hostname;
-
-    //for (size_t i=0; i<queryHeader.size(); i++) {
-    //    std::cout << int(data[i]) << std::endl;
-    //}
-
     while (pos + 2 < data.size()) {
         const uint8_t length = data[pos];
         pos++;
@@ -192,10 +200,14 @@ bool query(const int fd, sockaddr_in *address)
 
         int st = select(fd+1, &fds, nullptr, nullptr, &tv);
         if (st < 0) {
-            perror("Error while waiting to read");
+            if (errno != EINTR) {
+                perror("Error while waiting to read");
+            }
+            continue;
         }
         if (st == 0) {
-            puts("Timeout waiting for read, sending a new request");
+            puts("Timeout waiting for chromecast, sending a new request");
+            sendRequest(fd);
             continue;
         }
 
@@ -224,7 +236,6 @@ bool query(const int fd, sockaddr_in *address)
 
         std::string name = parsePacket(packet);
         if (name.empty()) {
-            std::cerr << "Got empty name from " << inet_ntoa(address->sin_addr) << std::endl;
             continue;
         }
         if (name != queryName) {
@@ -233,14 +244,17 @@ bool query(const int fd, sockaddr_in *address)
         }
 
         return true;
-    } while (std::chrono::steady_clock::now() - start < waitTime);
+    } while (s_running);
 
-    puts("Timeout waiting for chromecast response");
     return false;
 }
 
 int main(int argc, char *argv[])
 {
+    signal(SIGINT, &signalHandler);
+    signal(SIGTERM, &signalHandler);
+    signal(SIGQUIT, &signalHandler);
+
     const int fd = openSocket();
     if (fd < 0) {
         return 1;
