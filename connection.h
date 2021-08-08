@@ -2,6 +2,7 @@
 
 extern "C" {
 #include <openssl/ssl.h>
+#include <netdb.h>
 }
 
 #include <cassert>
@@ -85,3 +86,48 @@ struct Connection
     SSL *handle = nullptr;
     int fd = -1;
 };
+
+static std::string downloadFile(const std::string &hostname, const int port, const std::string &filePath)
+{
+    struct sockaddr_in serverAddress;
+    serverAddress.sin_family = AF_INET;
+    serverAddress.sin_port = htons(port);
+
+    struct hostent *hostinfo = gethostbyname(hostname.c_str());
+
+    if (hostinfo == nullptr) {
+        perror(("Failed to resolve " + hostname).c_str());
+        return "";
+    }
+
+    serverAddress.sin_addr = *(struct in_addr*) hostinfo->h_addr;
+
+    Connection connection;
+    if (!connection.connect(serverAddress)) {
+        std::cerr << "Failed to connect to " << hostname << std::endl;
+        return "";
+    }
+
+    const std::string request =
+        "GET " + filePath + " HTTP/1.1\r\n" +
+        "Host: " + hostname + "\r\n"
+        "User-Agent: fuckifiknow/1.0\r\n"
+        "Accept: */*\r\n"
+        "\r\n";
+
+    if (!connection.write(request)) {
+        puts("Failed to write GET request");
+        return "";
+    }
+    const std::string response = connection.read(1024 * 1024); // idk, 1MB should be enough
+
+    const char *endOfHeaderMarker = "\r\n\r\n";
+    // Just ignore all the header shit
+    std::string::size_type endOfHeader = response.find(endOfHeaderMarker);
+    if (endOfHeader == std::string::npos) {
+        puts("Failed to find end of header in returned data");
+        return "";
+    }
+
+    return response.substr(endOfHeader + strlen(endOfHeaderMarker));
+}
