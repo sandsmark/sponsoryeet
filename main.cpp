@@ -28,7 +28,6 @@ void signalHandler(int sig)
     s_running = false;
 }
 
-
 int main(int argc, char *argv[])
 {
     signal(SIGINT, &signalHandler);
