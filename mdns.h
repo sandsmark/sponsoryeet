@@ -71,7 +71,7 @@ int openSocket()
 
     st = setsockopt(fd, IPPROTO_IP, MCAST_JOIN_GROUP, reinterpret_cast<const char*>(&mgroup), sizeof(mgroup));
     if (st < 0) {
-        perror("Failed to join multicast group");
+        perror(" ! Failed to join multicast group");
         close(fd);
         return -1;
     }
@@ -95,7 +95,7 @@ bool sendData(const int fd, const std::vector<uint8_t> &data)
 
     // todo check length
     if (st < 0) {
-        perror("Failed to send request");
+        perror(" ! Failed to send request");
         return false;
     }
 
@@ -114,6 +114,7 @@ bool sendRequest(const int fd)
     }
 
     data.insert(data.end(), queryFooter.begin(), queryFooter.end());
+    puts(" > Sending request....");
 
     return sendData(fd, data);
 }
@@ -129,6 +130,7 @@ std::string parsePacket(const std::string &data)
 
     // No answers in packet
     if (data[6] == 0 && data[7] == 0) {
+        puts(" - Packet with no query response (probably a request)");
         return "";
     }
 
@@ -144,7 +146,7 @@ std::string parsePacket(const std::string &data)
 
         const uint8_t nextPos = pos + length;
         if (nextPos >= data.size()) {
-            std::cerr << "Invalid packet, next pos out of range (" << size_t(nextPos) << " max: " << data.size() << ")" << std::endl;
+            std::cerr << " ! Invalid packet, next pos out of range (" << size_t(nextPos) << " max: " << data.size() << ")" << std::endl;
             return "";
         }
         hostname += data.substr(pos, length) + ".";
@@ -178,12 +180,12 @@ bool query(const int fd, sockaddr_in *address)
         int st = select(fd+1, &fds, nullptr, nullptr, &tv);
         if (st < 0) {
             if (errno != EINTR) {
-                perror("Error while waiting to read");
+                perror(" ! Error while waiting to read");
             }
             continue;
         }
         if (st == 0) {
-            puts("Timeout waiting for chromecast, sending a new request");
+            puts(" - Timeout waiting for mdns response");
             sendRequest(fd);
             continue;
         }
@@ -198,16 +200,17 @@ bool query(const int fd, sockaddr_in *address)
             );
 
         if (size < 0) {
-            perror("Failed to read packet");
+            perror(" ! Failed to read packet");
             return false;
         }
 
         if (addressStorage.ss_family != AF_INET) {
-            std::cerr << "Got wrong family, not IPv4 " << addressStorage.ss_family << std::endl;
+            std::cerr << " ! Got wrong family, not IPv4 " << addressStorage.ss_family << std::endl;
             continue;
         }
 
         memcpy(address, &addressStorage, addressSize);
+        puts(" < Got response");
 
         packet.resize(size);
 
@@ -216,7 +219,7 @@ bool query(const int fd, sockaddr_in *address)
             continue;
         }
         if (name != queryName) {
-            std::cerr << "Got wrong name '" << name << "' from " << inet_ntoa(address->sin_addr) << std::endl;
+            std::cerr << " - Got wrong name '" << name << "' from " << inet_ntoa(address->sin_addr) << std::endl;
             continue;
         }
 

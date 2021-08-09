@@ -20,6 +20,7 @@ extern "C" {
 
 #include "mdns.h"
 #include "connection.h"
+#include "chromecast.h"
 
 
 void signalHandler(int sig)

@@ -61,7 +61,7 @@ struct Connection
         return true;
     }
 
-    bool write(const std::string &data) {
+    bool write(const std::string &data) const {
         return SSL_write(handle, data.data(), data.size()) == data.size();
     }
 
