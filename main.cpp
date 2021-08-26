@@ -1,5 +1,4 @@
 static bool s_running = true;
-#include "helpers.h"
 
 extern "C" {
 #include <sys/socket.h>
@@ -23,6 +22,7 @@ extern "C" {
 #include "mdns.h"
 #include "connection.h"
 #include "chromecast.h"
+#include "sponsor.h"
 
 static bool findChromecast(sockaddr_in *address)
 {
@@ -46,6 +46,17 @@ static bool findChromecast(sockaddr_in *address)
     return true;
 }
 
+std::string regexExtract(const std::string &regexstr, const std::string &payload)
+{
+    std::regex regex(regexstr);
+    std::smatch match;
+    if (!std::regex_search(payload, match, regex) || match.size() != 2) {
+        std::cerr << "Failed to get match!" << std::endl;
+        return "";
+    }
+    return match[1].str();
+}
+
 std::string getType(const std::string &payload)
 {
     const std::regex typeRegex(R"--("type"\s*:\s*"([^"]+)")--");
@@ -59,6 +70,8 @@ std::string getType(const std::string &payload)
 
     return type;
 }
+static std::string currentVideo;
+static std::vector<Segment> currentSegments;
 
 bool handleMessage(Connection *connection, std::istringstream *istr)
 {
@@ -95,6 +108,10 @@ bool handleMessage(Connection *connection, std::istringstream *istr)
     if (type == "MEDIA_STATUS") {
         std::string videoID = regexExtract(R"--("contentId"\s*:\s*"([^"]+)")--", message.payload_utf8());
         std::string currentPosition = regexExtract(R"--("currentTime"\s*:\s*"([^"]+)")--", message.payload_utf8());
+        if (videoID != currentVideo) {
+            currentSegments = downloadSegments(videoID);
+            currentVideo = videoID;
+        }
     }
 
     if (message.namespace_() == cc::ns::strings[cc::ns::Heartbeat]) {
