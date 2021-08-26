@@ -81,14 +81,14 @@ bool sendSimple(const Connection &conn, const msg::Type type, const ns::Namespac
     return sendMessage(conn, ns::strings[urn], msgs[type]);
 }
 
-bool seek(const Connection &conn, double position, const std::string sessionID)
+bool seek(const Connection &conn, double position)
 {
     return sendMessage(conn,
             ns::strings[ns::Media],
             "{ "
             " \"type\": \"SEEK\", "
             " \"requestId\": " + std::to_string(s_requestId++) + ", "
-            " \"mediaSessionId\": " + sessionID + ", "
+            " \"mediaSessionId\": " + dest + ", "
             " \"currentTime\": " + std::to_string(position) +
             "}"
         );

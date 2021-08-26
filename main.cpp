@@ -73,32 +73,64 @@ std::string getType(const std::string &payload)
 static std::string currentVideo;
 static double currentPosition = -1.;
 static std::vector<Segment> currentSegments;
+static double nextSegmentStart = -1.;
 
-static Segment nextSegment()
+static double secondsUntilNextSegment()
 {
     if (currentPosition < 0) {
-        return {};
+        return 1.;
     }
     if (currentSegments.empty()) {
-        return {};
+        return 1.;
     }
 
     double lowestBegin = currentSegments[0].begin;
-    int lowest = -1;
-
-    for (size_t i=0; i<currentSegments.size(); i++) {
-        if (currentSegments[i].end < currentPosition) {
+    for (const Segment &segment : currentSegments) {
+        if (segment.end < currentPosition) {
             continue;
         }
-        if (currentSegments[i].begin < lowestBegin) {
-            lowestBegin = currentSegments[i].begin;
-            lowest = i;
+        if (segment.begin < lowestBegin) {
+            lowestBegin = segment.begin;
         }
     }
-    if (lowest == -1) {
-        return {};
+    return lowestBegin;
+}
+
+static double currentSegmentEnd()
+{
+    if (currentPosition < 0) {
+        return -1;
     }
-    return currentSegments[lowest];
+    if (currentSegments.empty()) {
+        return -1;
+    }
+
+    double lowestBegin = currentSegments[0].begin;
+    for (const Segment &segment : currentSegments) {
+        if (segment.end < currentPosition) {
+            continue;
+        }
+        if (segment.begin < currentPosition) {
+            return segment.end;
+        }
+    }
+    return -1;
+}
+static void maybeSeek(Connection *connection)
+{
+    if (currentVideo.empty()) {
+        return;
+    }
+    if (currentSegments.empty()) {
+        return;
+    }
+    const double segmentEnd = currentSegmentEnd();
+    if (segmentEnd > 0) {
+        currentPosition = -1.;
+        nextSegmentStart = -1.;
+        cc::seek(*connection, segmentEnd);
+        cc::sendSimple(*connection, cc::msg::GetStatus, cc::ns::Media);
+    }
 }
 
 bool handleMessage(Connection *connection, std::istringstream *istr)
@@ -136,6 +168,7 @@ bool handleMessage(Connection *connection, std::istringstream *istr)
         if (videoID != currentVideo) {
             currentSegments = downloadSegments(videoID);
             currentVideo = videoID;
+            nextSegmentStart = -1;
         }
 
         std::string currentPositionStr = regexExtract(R"--("currentTime"\s*:\s*"([^"]+)")--", payload);
@@ -143,7 +176,12 @@ bool handleMessage(Connection *connection, std::istringstream *istr)
         if (errno == ERANGE) {
             std::cerr << "Invalid current position " << currentPositionStr << std::endl;
             currentPosition = -1.;
+            return true;
         }
+
+        double delta = secondsUntilNextSegment();
+        nextSegmentStart = time(nullptr) + delta;
+        maybeSeek(connection);
     }
 
     if (message.namespace_() == cc::ns::strings[cc::ns::Heartbeat]) {
@@ -198,7 +236,13 @@ int loop(const sockaddr_in &address)
 
         // idk, 1 second debug mostly for debugging
         timeval timeout;
-        timeout.tv_sec = 1;
+        double currentTime = time(nullptr);
+        if (nextSegmentStart > 0 && nextSegmentStart > currentTime) {
+            std::cout << "Next segment at " << nextSegmentStart << ", current time " << currentTime << std::endl;
+            timeout.tv_sec = nextSegmentStart - currentTime;
+        } else {
+            timeout.tv_sec = 1;
+        }
         timeout.tv_usec = 0;
         const int events = select(connection.fd + 1, &fdset, 0, 0, &timeout);
 
@@ -241,6 +285,11 @@ int loop(const sockaddr_in &address)
             if (connection.eof) {
                 return ECONNRESET;
             }
+        }
+        currentTime = time(nullptr);
+        if (nextSegmentStart > 0 && nextSegmentStart < currentTime) {
+            // Check if we need to seek
+            cc::sendSimple(connection, cc::msg::GetStatus, cc::ns::Media);
         }
         //try {
         //    while (handleMessage(&response) && !response.empty()) { }
