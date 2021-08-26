@@ -82,5 +82,33 @@ bool seek(const Connection &conn, double position, const std::string sessionID)
         );
 }
 
+size_t decodeHeader(const std::string &buffer, uint8_t *tag, uint8_t *wire, uint32_t *lengthOrValue)
+{
+    size_t processedBytes = 0;
+    if (buffer.empty()) {
+        puts("Empty buffer received");
+        return 0;
+    }
+
+    *wire = buffer[0] & 0b111;
+    *tag = buffer[0] >> 3;
+    processedBytes++;
+
+    *lengthOrValue = 0;
+    for (int decoded = 0; processedBytes < buffer.size(); decoded++) {
+        const uint8_t current = buffer[processedBytes];
+        processedBytes++;
+
+        *lengthOrValue |= current & 0x7F << ((decoded) * 7);
+        decoded++;
+
+        if ((current & 0x80) == 0) {
+            break;
+        }
+    }
+
+    return processedBytes;
+}
+
 } //namespace cc
 

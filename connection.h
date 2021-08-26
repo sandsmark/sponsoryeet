@@ -44,9 +44,10 @@ struct Connection
             return false;
         }
 
+        std::string addressString = std::string(inet_ntoa(address.sin_addr)) + ":" + std::to_string(ntohs(address.sin_port));
         int ret = ::connect(fd, (const struct sockaddr*)(&address),sizeof(address));
         if (ret != 0) {
-            perror("Failed to connect to chromecast");
+            perror(("Failed to connect to " + addressString).c_str());
             return false;
         }
 
