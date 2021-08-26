@@ -5,9 +5,11 @@
 
 namespace cc
 {
+    static std::string dest;
 
-bool sendMessage(const Connection &conn, const std::string &ns, const std::string &message, const std::string &dest = "")
+bool sendMessage(const Connection &conn, const std::string &ns, const std::string &message ) //, const std::string &dest = "")
 {
+    std::cout << "Sending '" << ns << ": '" << message << "'" << std::endl;
     cast_channel::CastMessage msg;
     msg.set_payload_type(msg.STRING);
     msg.set_protocol_version(msg.CASTV2_1_0);
@@ -46,18 +48,23 @@ namespace msg
 enum Type {
     Connect = 0,
     Ping,
+    Pong,
     GetStatus,
+    MediaStatus,
     SimpleMessageCount
 };
 
 }//namespace msgs
 
+static int s_requestId = 1;
 bool sendSimple(const Connection &conn, const msg::Type type, const ns::Namespace urn)
 {
     static const char *msgs[msg::SimpleMessageCount] = {
         "{\"type\": \"CONNECT\"}",
         "{\"type\": \"PING\"}",
-        "{\"type\": \"GET_STATUS\", \"requestId\": 1}"
+        "{\"type\": \"PONG\"}",
+        "{\"type\": \"GET_STATUS\", \"requestId\": 1}",
+        "{\"type\": \"MEDIA_STATUS\"}"
     };
 
     if (urn >= ns::NamespacesCount) {
@@ -66,6 +73,11 @@ bool sendSimple(const Connection &conn, const msg::Type type, const ns::Namespac
     if (type >= msg::SimpleMessageCount) {
         return false;
     }
+    //if (type == msg::GetStatus) {
+    //    return sendMessage(conn, ns::strings[urn], 
+    //            "{\"type\": \"GET_STATUS\", \"requestId\": " + std::to_string(s_requestId++) + "}"
+    //            );
+    //}
     return sendMessage(conn, ns::strings[urn], msgs[type]);
 }
 
@@ -75,7 +87,7 @@ bool seek(const Connection &conn, double position, const std::string sessionID)
             ns::strings[ns::Media],
             "{ "
             " \"type\": \"SEEK\", "
-            " \"requestId\": 2, "
+            " \"requestId\": " + std::to_string(s_requestId++) + ", "
             " \"mediaSessionId\": " + sessionID + ", "
             " \"currentTime\": " + std::to_string(position) +
             "}"

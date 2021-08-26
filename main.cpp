@@ -1,4 +1,5 @@
 static bool s_running = true;
+#include "helpers.h"
 
 extern "C" {
 #include <sys/socket.h>
@@ -45,28 +46,87 @@ static bool findChromecast(sockaddr_in *address)
     return true;
 }
 
-bool handleMessage(std::string *buffer)
+std::string getType(const std::string &payload)
 {
-    if (buffer->empty()) {
-        return false;
+    const std::regex typeRegex(R"--("type"\s*:\s*"([^"]+)")--");
+    std::smatch typeMatch;
+    if (!std::regex_search(payload, typeMatch, typeRegex) || typeMatch.size() != 2) {
+        std::cerr << "Failed to get type!" << std::endl;
+        return "";
     }
-    uint8_t tag = 0;
-    uint8_t wire = 0;
-    uint32_t lengthOrValue = 0;
-    size_t processedBytes = cc::decodeHeader(*buffer, &tag, &wire, &lengthOrValue);
-    if (processedBytes == 0) {
-        puts("Error while parsing header");
-        return false;
-    }
-    printf("tag: %hhx, wire: %hhx, length or value: %u, processed: %lld\n", tag, wire, lengthOrValue, processedBytes);
+    std::string type = typeMatch[1].str();
+    std::cout << "type: " << type << std::endl;
 
-    *buffer = buffer->substr(processedBytes);
+    return type;
+}
+
+bool handleMessage(Connection *connection, std::istringstream *istr)
+{
+    if (istr->eof()) {
+        return false;
+    }
+    if (!istr->good()) {
+        puts("No good buffer");
+        return false;
+    }
+    cast_channel::CastMessage message;
+    if (!message.ParseFromIstream(istr)) {
+        if (message.IsInitializedWithErrors()) {
+            puts("has errors");
+        }
+        puts("PArsing failed");
+        return false;
+    }
+
+    std::cout << message.source_id() << " > " << message.destination_id() << " (" << message.namespace_() << "): " << message.payload_utf8() << std::endl;
+    if (!message.has_payload_utf8()) {
+        puts("No string payload");
+        return true;
+    } else if (message.has_payload_binary()) {
+        puts("Got binary message, ignoring");
+        return true;
+    }
+    std::string type = regexExtract(R"--("type"\s*:\s*"([^"]+)")--", message.payload_utf8());
+    std::cout << "Got type: " << type << std::endl;
+    if (type == "CLOSE") {
+        cc::sendSimple(*connection, cc::msg::Connect, cc::ns::Connection);
+        return true;
+    }
+    if (type == "MEDIA_STATUS") {
+        std::string videoID = regexExtract(R"--("contentId"\s*:\s*"([^"]+)")--", message.payload_utf8());
+        std::string currentPosition = regexExtract(R"--("currentTime"\s*:\s*"([^"]+)")--", message.payload_utf8());
+    }
+
+    if (message.namespace_() == cc::ns::strings[cc::ns::Heartbeat]) {
+        if (type == "PING") {
+            puts("Got ping, sending pong");
+            cc::sendSimple(*connection, cc::msg::Pong, cc::ns::Heartbeat);
+            //cc::sendSimple(*connection, cc::msg::Ping, cc::ns::Heartbeat);
+        }
+        return true;
+    }
+    if (message.namespace_() == cc::ns::strings[cc::ns::Receiver]) {
+        if (type == "RECEIVER_STATUS") {
+            const std::string displayName = regexExtract(R"--("displayName"\s*:\s*"([^"]+)")--", message.payload_utf8());
+            const std::string sessionId = regexExtract(R"--("sessionId"\s*:\s*"([^"]+)")--", message.payload_utf8());
+            std::cout << "got display name " << displayName << std::endl;
+            std::cout << "session: " <<  sessionId << std::endl;
+            cc::dest = sessionId;
+            if (displayName == "YouTube") {
+                puts("Correct");
+                cc::sendSimple(*connection, cc::msg::GetStatus, cc::ns::Media);
+            }
+        }
+    }
+
     return true;
 }
 
 // TODO: automatically reconnect
 int loop(const sockaddr_in &address)
 {
+    cc::dest = "";
+
     Connection connection;
     if (!connection.connect(address)) {
         std::cerr << "Failed to connect to " << inet_ntoa(address.sin_addr) << std::endl;
@@ -77,13 +137,12 @@ int loop(const sockaddr_in &address)
         return errno;
     }
     puts("Connected");
-    if (!cc::sendSimple(connection, cc::msg::Ping, cc::ns::Heartbeat)) {
-        puts("Failed to send ping message");
+    if (!cc::sendSimple(connection, cc::msg::GetStatus, cc::ns::Receiver)) {
+        puts("Failed to send getstatus message");
         return errno;
     }
-    puts("pinged");
 
-    while (s_running) {
+    while (s_running && !connection.eof) {
         fd_set fdset;
         FD_ZERO(&fdset);
         FD_SET(connection.fd, &fdset);
@@ -105,17 +164,41 @@ int loop(const sockaddr_in &address)
         if (errno == EINTR || events == 0) {
             continue;
         }
-        std::string response = connection.read(1024 * 1024); // idk, 1MB should be enough
+        std::string msgLengthBuffer = connection.read(sizeof(uint32_t));
+        if (msgLengthBuffer.size() < 4) {
+            std::cerr << "Failed to read message size: '" << msgLengthBuffer << "'" << std::endl;
+            return EBADMSG;
+        }
+        if (connection.eof) {
+            puts("Connection closed");
+            return ECONNRESET;
+        }
+        uint32_t msgLength = 0;
+        memcpy(&msgLength, msgLengthBuffer.data(), sizeof msgLength);
+        msgLength = ntohl(msgLength);
+        printf("Message length: %d\n", msgLength);
+
+        std::string response = connection.read(msgLength);
         if (response.empty()) {
             puts("No message received");
             return EINVAL;
         }
-        try {
-            while (handleMessage(&response) && !response.empty()) { }
-        } catch (const std::exception &e) {
-            puts(e.what());
+        if (response.size() < msgLength) {
+            std::cerr << "Short read, expected " << msgLength << " got " << response.size() << std::endl;
             return EBADMSG;
         }
+        std::istringstream istr(response);
+        while (handleMessage(&connection, &istr)) {
+            if (connection.eof) {
+                return ECONNRESET;
+            }
+        }
+        //try {
+        //    while (handleMessage(&response) && !response.empty()) { }
+        //} catch (const std::exception &e) {
+        //    puts(e.what());
+        //    return EBADMSG;
+        //}
     }
     return 0;
 }
