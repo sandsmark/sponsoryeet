@@ -71,7 +71,35 @@ std::string getType(const std::string &payload)
     return type;
 }
 static std::string currentVideo;
+static double currentPosition = -1.;
 static std::vector<Segment> currentSegments;
+
+static Segment nextSegment()
+{
+    if (currentPosition < 0) {
+        return {};
+    }
+    if (currentSegments.empty()) {
+        return {};
+    }
+
+    double lowestBegin = currentSegments[0].begin;
+    int lowest = -1;
+
+    for (size_t i=0; i<currentSegments.size(); i++) {
+        if (currentSegments[i].end < currentPosition) {
+            continue;
+        }
+        if (currentSegments[i].begin < lowestBegin) {
+            lowestBegin = currentSegments[i].begin;
+            lowest = i;
+        }
+    }
+    if (lowest == -1) {
+        return {};
+    }
+    return currentSegments[lowest];
+}
 
 bool handleMessage(Connection *connection, std::istringstream *istr)
 {
@@ -84,9 +112,6 @@ bool handleMessage(Connection *connection, std::istringstream *istr)
     }
     cast_channel::CastMessage message;
     if (!message.ParseFromIstream(istr)) {
-        if (message.IsInitializedWithErrors()) {
-            puts("has errors");
-        }
         puts("PArsing failed");
         return false;
     }
@@ -99,18 +124,25 @@ bool handleMessage(Connection *connection, std::istringstream *istr)
         puts("Got binary message, ignoring");
         return true;
     }
-    std::string type = regexExtract(R"--("type"\s*:\s*"([^"]+)")--", message.payload_utf8());
+    const std::string payload = message.payload_utf8();
+    std::string type = regexExtract(R"--("type"\s*:\s*"([^"]+)")--", payload);
     std::cout << "Got type: " << type << std::endl;
     if (type == "CLOSE") {
         cc::sendSimple(*connection, cc::msg::Connect, cc::ns::Connection);
         return true;
     }
     if (type == "MEDIA_STATUS") {
-        std::string videoID = regexExtract(R"--("contentId"\s*:\s*"([^"]+)")--", message.payload_utf8());
-        std::string currentPosition = regexExtract(R"--("currentTime"\s*:\s*"([^"]+)")--", message.payload_utf8());
+        std::string videoID = regexExtract(R"--("contentId"\s*:\s*"([^"]+)")--", payload);
         if (videoID != currentVideo) {
             currentSegments = downloadSegments(videoID);
             currentVideo = videoID;
+        }
+
+        std::string currentPositionStr = regexExtract(R"--("currentTime"\s*:\s*"([^"]+)")--", payload);
+        currentPosition = strtod(currentPositionStr.c_str(), nullptr);
+        if (errno == ERANGE) {
+            std::cerr << "Invalid current position " << currentPositionStr << std::endl;
+            currentPosition = -1.;
         }
     }
 
@@ -124,8 +156,8 @@ bool handleMessage(Connection *connection, std::istringstream *istr)
     }
     if (message.namespace_() == cc::ns::strings[cc::ns::Receiver]) {
         if (type == "RECEIVER_STATUS") {
-            const std::string displayName = regexExtract(R"--("displayName"\s*:\s*"([^"]+)")--", message.payload_utf8());
-            const std::string sessionId = regexExtract(R"--("sessionId"\s*:\s*"([^"]+)")--", message.payload_utf8());
+            const std::string displayName = regexExtract(R"--("displayName"\s*:\s*"([^"]+)")--", payload);
+            const std::string sessionId = regexExtract(R"--("sessionId"\s*:\s*"([^"]+)")--", payload);
             std::cout << "got display name " << displayName << std::endl;
             std::cout << "session: " <<  sessionId << std::endl;
             cc::dest = sessionId;
