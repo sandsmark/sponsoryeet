@@ -25,7 +25,6 @@ static std::vector<double> splitToDouble(std::string string)
             errno = 0;
             return {};
         }
-        std::cout << "Got timestamp " << timestamp << std::endl;
         ret.push_back(timestamp);
     }
     return ret;
@@ -33,29 +32,31 @@ static std::vector<double> splitToDouble(std::string string)
 
 std::vector<Segment> downloadSegments(const std::string &videoId)
 {
-    const std::string json = downloadFile("sponsor.ajay.app", 443, "/api/skipSegments?videoID=" + videoId);
+    if (videoId.empty()) {
+        puts("Got empty videoId");
+        return {};
+    }
+    std::string json = downloadFile("sponsor.ajay.app", 443, "/api/skipSegments?videoID=" + videoId);
     if (json.empty()) {
         puts("Failed to download segments to skip");
         return {};
     }
 
     std::regex segmentsRegex(R"--("segment"\s*:\[([^\]]+)\])--");
-    std::smatch match;
     std::vector<Segment> segments;
-    while(std::regex_search(json, match, segmentsRegex)) {
-        if (match.size() != 2) {
-            std::cout << "Invalid segments array '" << json << "'" << std::endl;
-            return {};
-        }
+    std::sregex_iterator it = std::sregex_iterator(json.begin(), json.end(), segmentsRegex);
+    for (; it != std::sregex_iterator(); it++) {
+        const std::smatch match = *it;
         std::string segmentsArray = match[1].str();
         std::vector<double> numbers = splitToDouble(segmentsArray);
         if (numbers.size() != 2) {
             std::cout << "Invalid segment " << segmentsArray << std::endl;
             return {};
         }
-        std::cout << "Got segment " << numbers[0] << " -> " << numbers[1] << std::endl;
+        //std::cout << "Got segment " << numbers[0] << " -> " << numbers[1] << std::endl;
         segments.push_back({numbers[0], numbers[1]});
     }
+    std::cout << "Got " << segments.size() << " segments for " << videoId << std::endl;
 
     return segments;
 }

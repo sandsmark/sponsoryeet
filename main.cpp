@@ -1,5 +1,7 @@
 static bool s_running = true;
 
+#define PROGRESS_WIDTH 20
+
 extern "C" {
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -11,6 +13,7 @@ extern "C" {
 #include <cstdio>
 #include <cstring>
 #include <cstdint>
+#include <cmath>
 
 #include <vector>
 #include <string>
@@ -24,34 +27,12 @@ extern "C" {
 #include "chromecast.h"
 #include "sponsor.h"
 
-static bool findChromecast(sockaddr_in *address)
-{
-    const int fd = mdns::openSocket();
-    if (fd < 0) {
-        return 1;
-    }
-    if (!mdns::sendRequest(fd)) {
-        return 2;
-    }
-
-    const bool found = mdns::query(fd, address);
-    close(fd);
-
-    if (!found) {
-        perror("Failed to find chromecast");
-        return false;
-    }
-    address->sin_port = htons(8009);
-    std::cout << "Found chromecast: " << inet_ntoa(address->sin_addr) << std::endl;
-    return true;
-}
-
 std::string regexExtract(const std::string &regexstr, const std::string &payload)
 {
     std::regex regex(regexstr);
     std::smatch match;
     if (!std::regex_search(payload, match, regex) || match.size() != 2) {
-        std::cerr << "Failed to get match!" << std::endl;
+        std::cerr << "Failed to get match for '" << regexstr << "' in:\n" << payload << std::endl;
         return "";
     }
     return match[1].str();
@@ -70,21 +51,43 @@ std::string getType(const std::string &payload)
 
     return type;
 }
+
+bool extractNumber(const std::string &regex, const std::string &payload, double *number)
+{
+    const std::string numberString = regexExtract(regex, payload);
+    if (numberString.empty()) {
+        std::cerr << "Failed to extract number '" << regex << "'" << std::endl;
+        return false;
+    }
+    char *endptr = nullptr;
+    const char *startptr = numberString.c_str();
+    const double converted = strtod(startptr, &endptr);
+    if (endptr == startptr || errno == ERANGE) {
+        return false;
+    }
+    *number = converted;
+
+    return true;
+}
+
+
 static std::string currentVideo;
 static double currentPosition = -1.;
+static double currentDuration = -1.;
+static double lastPositionFetched = -1;
 static std::vector<Segment> currentSegments;
 static double nextSegmentStart = -1.;
 
 static double secondsUntilNextSegment()
 {
     if (currentPosition < 0) {
-        return 1.;
+        return -1;
     }
     if (currentSegments.empty()) {
-        return 1.;
+        return -1;
     }
 
-    double lowestBegin = currentSegments[0].begin;
+    double lowestBegin = -1;//currentSegments[0].begin;
     for (const Segment &segment : currentSegments) {
         if (segment.end < currentPosition) {
             continue;
@@ -116,6 +119,7 @@ static double currentSegmentEnd()
     }
     return -1;
 }
+
 static void maybeSeek(Connection *connection)
 {
     if (currentVideo.empty()) {
@@ -133,6 +137,40 @@ static void maybeSeek(Connection *connection)
     }
 }
 
+void printTimestamp(int timestamp)
+{
+    const int seconds = timestamp % 60;
+    timestamp /= 60;
+    const int minutes = timestamp % 60;
+    timestamp /= 60;
+    const int hours = timestamp % 60;
+    printf("%.2d:%.2d:%.2d", hours, minutes, seconds);
+}
+
+void printProgress(double position, double length)
+{
+    if (position < 0 || length < 0 || lastPositionFetched < 0) {
+        //printf("\rInvalid position or length");
+        //fflush(stdout);
+        return;
+    }
+    double timeDelta = time(nullptr) - lastPositionFetched;
+    position = std::round(timeDelta + position);
+    printf("\r[");
+    int playedLength = position * PROGRESS_WIDTH / length;
+    for (int i=0; i<playedLength; i++) {
+        printf("=");
+    }
+    for (int i=playedLength; i<PROGRESS_WIDTH; i++) {
+        printf("-");
+    }
+    printf("] ");
+    printTimestamp(position);
+    printf("/");
+    printTimestamp(length);
+    fflush(stdout);
+}
+
 bool handleMessage(Connection *connection, std::istringstream *istr)
 {
     if (istr->eof()) {
@@ -148,7 +186,7 @@ bool handleMessage(Connection *connection, std::istringstream *istr)
         return false;
     }
 
-    std::cout << message.source_id() << " > " << message.destination_id() << " (" << message.namespace_() << "): " << message.payload_utf8() << std::endl;
+    //std::cout << message.source_id() << " > " << message.destination_id() << " (" << message.namespace_() << "): \n" << message.payload_utf8() << std::endl;
     if (!message.has_payload_utf8()) {
         puts("No string payload");
         return true;
@@ -158,35 +196,57 @@ bool handleMessage(Connection *connection, std::istringstream *istr)
     }
     const std::string payload = message.payload_utf8();
     std::string type = regexExtract(R"--("type"\s*:\s*"([^"]+)")--", payload);
-    std::cout << "Got type: " << type << std::endl;
     if (type == "CLOSE") {
         cc::sendSimple(*connection, cc::msg::Connect, cc::ns::Connection);
         return true;
     }
     if (type == "MEDIA_STATUS") {
         std::string videoID = regexExtract(R"--("contentId"\s*:\s*"([^"]+)")--", payload);
+        if (videoID.empty()) {
+            std::cerr << "Failed to find video id" << std::endl;
+            return true;
+        }
         if (videoID != currentVideo) {
             currentSegments = downloadSegments(videoID);
             currentVideo = videoID;
             nextSegmentStart = -1;
         }
 
-        std::string currentPositionStr = regexExtract(R"--("currentTime"\s*:\s*"([^"]+)")--", payload);
+        std::string currentPositionStr = regexExtract(R"--("currentTime"\s*:\s*([0-9.]+))--", payload);
+        if (currentPositionStr.empty()) {
+            std::cerr << "Failed to find current time" << std::endl;
+            currentPosition = -1.;
+            return true;
+        }
         currentPosition = strtod(currentPositionStr.c_str(), nullptr);
+
+        std::string currentDurationStr = regexExtract(R"--("duration"\s*:\s*([0-9.]+))--", payload);
+        if (currentDurationStr.empty()) {
+            std::cerr << "Failed to find current duration" << std::endl;
+            currentDuration = -1.;
+            return true;
+        }
+        currentDuration = strtod(currentDurationStr.c_str(), nullptr);
+
         if (errno == ERANGE) {
             std::cerr << "Invalid current position " << currentPositionStr << std::endl;
             currentPosition = -1.;
             return true;
         }
-
-        double delta = secondsUntilNextSegment();
-        nextSegmentStart = time(nullptr) + delta;
-        maybeSeek(connection);
+        lastPositionFetched = time(nullptr);
+        if (!currentSegments.empty()) {
+            double delta = secondsUntilNextSegment();
+            if (delta >= 0) {
+                nextSegmentStart = time(nullptr) + delta;
+                maybeSeek(connection);
+            }
+        }
+        return true;
     }
 
     if (message.namespace_() == cc::ns::strings[cc::ns::Heartbeat]) {
         if (type == "PING") {
-            puts("Got ping, sending pong");
+            //puts("Got ping, sending pong");
             cc::sendSimple(*connection, cc::msg::Pong, cc::ns::Heartbeat);
             //cc::sendSimple(*connection, cc::msg::Ping, cc::ns::Heartbeat);
         }
@@ -204,7 +264,9 @@ bool handleMessage(Connection *connection, std::istringstream *istr)
                 cc::sendSimple(*connection, cc::msg::GetStatus, cc::ns::Media);
             }
         }
+        return true;
     }
+    std::cout << "Got type: " << type << std::endl;
 
     return true;
 }
@@ -245,6 +307,7 @@ int loop(const sockaddr_in &address)
         }
         timeout.tv_usec = 0;
         const int events = select(connection.fd + 1, &fdset, 0, 0, &timeout);
+        printProgress(currentPosition, currentDuration);
 
         // debugging
         if (errno) {
@@ -269,7 +332,7 @@ int loop(const sockaddr_in &address)
         uint32_t msgLength = 0;
         memcpy(&msgLength, msgLengthBuffer.data(), sizeof msgLength);
         msgLength = ntohl(msgLength);
-        printf("Message length: %d\n", msgLength);
+        //printf("Message length: %d\n", msgLength);
 
         std::string response = connection.read(msgLength);
         if (response.empty()) {
@@ -321,7 +384,7 @@ int main(int argc, char *argv[])
             sleep(10);
         }
         sockaddr_in address;
-        if (!findChromecast(&address)) {
+        if (!mdns::findChromecast(&address)) {
             return ENOENT;
         }
         ret = loop(address);

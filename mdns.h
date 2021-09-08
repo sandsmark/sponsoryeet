@@ -228,4 +228,27 @@ bool query(const int fd, sockaddr_in *address)
 
     return false;
 }
+
+static bool findChromecast(sockaddr_in *address)
+{
+    const int fd = mdns::openSocket();
+    if (fd < 0) {
+        return 1;
+    }
+    if (!mdns::sendRequest(fd)) {
+        return 2;
+    }
+
+    const bool found = mdns::query(fd, address);
+    close(fd);
+
+    if (!found) {
+        perror("Failed to find chromecast");
+        return false;
+    }
+    address->sin_port = htons(8009);
+    std::cout << "Found chromecast: " << inet_ntoa(address->sin_addr) << std::endl;
+    return true;
+}
+
 } // namespace mdns
