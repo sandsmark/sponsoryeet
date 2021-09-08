@@ -1,15 +1,25 @@
-Like https://github.com/stephen304/castblock but not CPU hungry bash hack.
+sponsoryeet
+===========
 
-Not actually working, just mDNS to search for and discover chromecasts + ssl connection done so far.
+![screenshot](/screenshot.png)
 
-Still need some dummy basic http and json and shit.
+Automatically yeets sponsors away from the chromecast.
 
-Dependencies so far
--------------------
+Like https://github.com/stephen304/castblock but not CPU hungry bash hack
+depending on an endless amount of supply chain attacks waiting to happen (aka.
+an average go project).
+
+
+Dependencies
+------------
 
  * OpenSSL
  * protobuf
 
+Has a simple HTTP implementation, mdns implementation and uses c++11 regexes
+for parsing the json, so no more deps.
+
+Could implement protobuf myself as well, but meh.
 
 Why
 ---

@@ -135,7 +135,7 @@ static double currentSegmentEnd()
             return segment.end;
         }
     }
-    puts("Failed to find end of current segment");
+    //puts("Failed to find end of current segment");
     return -1;
 }
 
@@ -152,7 +152,7 @@ static void maybeSeek(Connection *connection)
     if (segmentEnd < 0) {
         return;
     }
-    printf("Current segment ends at: %f, position at %f\n", segmentEnd, currentPosition());
+    //printf("Current segment ends at: %f, position at %f\n", segmentEnd, currentPosition());
 
     if (!currentlyPlaying) {
         return;
@@ -251,7 +251,7 @@ bool handleMessage(Connection *connection, const std::string &inputBuffer)
     const std::string payload = message.payload_utf8();
     std::string type = regexExtract(R"--("type"\s*:\s*"([^"]+)")--", payload);
     if (type != "PING") {
-        std::cout << message.source_id() << " > " << message.destination_id() << " (" << message.namespace_() << "): \n" << message.payload_utf8() << std::endl;
+        //std::cout << message.source_id() << " > " << message.destination_id() << " (" << message.namespace_() << "): \n" << message.payload_utf8() << std::endl;
     }
 
     if (type == "CLOSE") {
@@ -274,7 +274,7 @@ bool handleMessage(Connection *connection, const std::string &inputBuffer)
         }
         std::string mediaSession = regexExtract(R"--("mediaSessionId"\s*:\s*([0-9]+))--", payload);
         if (!mediaSession.empty()) {
-            std::cout << "Got media session " << mediaSession << std::endl;
+            //std::cout << "Got media session " << mediaSession << std::endl;
             cc::mediaSession = mediaSession;
         }
 
@@ -353,13 +353,13 @@ int loop(const sockaddr_in &address)
 
         // idk, 1 second debug mostly for debugging
         timeval timeout;
-        double currentTime = time(nullptr);
-        if (nextSegmentStart > 0 && nextSegmentStart > currentTime) {
-            std::cout << "Next segment at " << nextSegmentStart << ", current time " << currentTime << std::endl;
-            timeout.tv_sec = nextSegmentStart - currentTime;
-        } else {
+        //double currentTime = time(nullptr);
+        //if (nextSegmentStart > 0 && nextSegmentStart > currentTime) {
+        //    std::cout << "Next segment at " << nextSegmentStart << ", current time " << currentTime << std::endl;
+        //    timeout.tv_sec = nextSegmentStart - currentTime;
+        //} else {
             timeout.tv_sec = 1;
-        }
+        //}
         timeout.tv_usec = 0;
         const int events = select(connection.fd + 1, &fdset, 0, 0, &timeout);
         printProgress(currentPosition(), currentDuration);
@@ -407,7 +407,7 @@ int loop(const sockaddr_in &address)
             puts("Disconnected");
             return ECONNRESET;
         }
-        currentTime = time(nullptr);
+        double currentTime = time(nullptr);
         if (nextSegmentStart > 0 && nextSegmentStart < currentTime) {
             // Check if we need to seek
             cc::sendSimple(connection, cc::msg::GetStatus, cc::ns::Media);

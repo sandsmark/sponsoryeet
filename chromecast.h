@@ -10,7 +10,7 @@ namespace cc
 
 bool sendMessage(const Connection &conn, const std::string &ns, const std::string &message ) //, const std::string &dest = "")
 {
-    std::cout << "Sending '" << ns << ": '" << message << "'" << std::endl;
+    //std::cout << "Sending '" << ns << ": '" << message << "'" << std::endl;
     cast_channel::CastMessage msg;
     msg.set_payload_type(msg.STRING);
     msg.set_protocol_version(msg.CASTV2_1_0);
