@@ -1,6 +1,6 @@
 static bool s_running = true;
 
-#define PROGRESS_WIDTH 20
+#define PROGRESS_WIDTH 40
 
 extern "C" {
 #include <sys/socket.h>
@@ -62,7 +62,7 @@ bool extractNumber(const std::string &regex, const std::string &payload, double 
     char *endptr = nullptr;
     const char *startptr = numberString.c_str();
     const double converted = strtod(startptr, &endptr);
-    if (endptr == startptr || errno == ERANGE) {
+    if (endptr == startptr || errno == ERANGE || !std::isfinite(converted)) {
         return false;
     }
     *number = converted;
@@ -150,6 +150,10 @@ void printTimestamp(int timestamp)
 void printProgress(double position, double length)
 {
     if (position < 0 || length < 0 || lastPositionFetched < 0) {
+        //static const char spinner[] = { '-', '\\', '|', '/', '-', '\\', '|', '/', };
+        //static uint8_t spinnerPos = 0;
+        //spinnerPos = (spinnerPos + 1) % sizeof(spinner);
+        //printf("\e[2K\r%c", spinner[spinnerPos]);
         //printf("\rInvalid position or length");
         //fflush(stdout);
         return;
@@ -164,10 +168,32 @@ void printProgress(double position, double length)
     for (int i=playedLength; i<PROGRESS_WIDTH; i++) {
         printf("-");
     }
+
     printf("] ");
     printTimestamp(position);
     printf("/");
     printTimestamp(length);
+
+    for (const Segment &segment : currentSegments) {
+        int start = PROGRESS_WIDTH * segment.begin / length;
+        if (start >= PROGRESS_WIDTH) {
+            start = PROGRESS_WIDTH - 1;
+        }
+        // Seek to the start of the bar
+        printf("\r\e[C");
+        for (int i=0; i<start; i++) {
+            printf("\e[C");
+        }
+
+        int length = PROGRESS_WIDTH * (segment.end - segment.begin) / length;
+        if (length < 1) {
+            length = 1;
+        }
+        for (int i=0; i<length; i++) {
+            printf("#");
+        }
+    }
+
     fflush(stdout);
 }
 
@@ -186,7 +212,7 @@ bool handleMessage(Connection *connection, std::istringstream *istr)
         return false;
     }
 
-    //std::cout << message.source_id() << " > " << message.destination_id() << " (" << message.namespace_() << "): \n" << message.payload_utf8() << std::endl;
+    std::cout << message.source_id() << " > " << message.destination_id() << " (" << message.namespace_() << "): \n" << message.payload_utf8() << std::endl;
     if (!message.has_payload_utf8()) {
         puts("No string payload");
         return true;
@@ -196,11 +222,18 @@ bool handleMessage(Connection *connection, std::istringstream *istr)
     }
     const std::string payload = message.payload_utf8();
     std::string type = regexExtract(R"--("type"\s*:\s*"([^"]+)")--", payload);
+
     if (type == "CLOSE") {
         cc::sendSimple(*connection, cc::msg::Connect, cc::ns::Connection);
         return true;
     }
+
     if (type == "MEDIA_STATUS") {
+        extractNumber(R"--("duration"\s*:\s*([0-9.]+))--", payload, &currentDuration);
+        if (extractNumber(R"--("currentTime"\s*:\s*([0-9.]+))--", payload, &currentPosition)) {
+            lastPositionFetched = time(nullptr);
+        }
+
         std::string videoID = regexExtract(R"--("contentId"\s*:\s*"([^"]+)")--", payload);
         if (videoID.empty()) {
             std::cerr << "Failed to find video id" << std::endl;
@@ -212,28 +245,6 @@ bool handleMessage(Connection *connection, std::istringstream *istr)
             nextSegmentStart = -1;
         }
 
-        std::string currentPositionStr = regexExtract(R"--("currentTime"\s*:\s*([0-9.]+))--", payload);
-        if (currentPositionStr.empty()) {
-            std::cerr << "Failed to find current time" << std::endl;
-            currentPosition = -1.;
-            return true;
-        }
-        currentPosition = strtod(currentPositionStr.c_str(), nullptr);
-
-        std::string currentDurationStr = regexExtract(R"--("duration"\s*:\s*([0-9.]+))--", payload);
-        if (currentDurationStr.empty()) {
-            std::cerr << "Failed to find current duration" << std::endl;
-            currentDuration = -1.;
-            return true;
-        }
-        currentDuration = strtod(currentDurationStr.c_str(), nullptr);
-
-        if (errno == ERANGE) {
-            std::cerr << "Invalid current position " << currentPositionStr << std::endl;
-            currentPosition = -1.;
-            return true;
-        }
-        lastPositionFetched = time(nullptr);
         if (!currentSegments.empty()) {
             double delta = secondsUntilNextSegment();
             if (delta >= 0) {
@@ -246,9 +257,7 @@ bool handleMessage(Connection *connection, std::istringstream *istr)
 
     if (message.namespace_() == cc::ns::strings[cc::ns::Heartbeat]) {
         if (type == "PING") {
-            //puts("Got ping, sending pong");
             cc::sendSimple(*connection, cc::msg::Pong, cc::ns::Heartbeat);
-            //cc::sendSimple(*connection, cc::msg::Ping, cc::ns::Heartbeat);
         }
         return true;
     }
