@@ -130,7 +130,7 @@ std::string parsePacket(const std::string &data)
 
     // No answers in packet
     if (data[6] == 0 && data[7] == 0) {
-        puts(" - Packet with no query response (probably a request)");
+        puts(" - Packet with no query response (probably another request)");
         return "";
     }
 

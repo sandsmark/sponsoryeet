@@ -6,10 +6,11 @@
 namespace cc
 {
     static std::string dest;
+    static std::string mediaSession;
 
 bool sendMessage(const Connection &conn, const std::string &ns, const std::string &message ) //, const std::string &dest = "")
 {
-    //std::cout << "Sending '" << ns << ": '" << message << "'" << std::endl;
+    std::cout << "Sending '" << ns << ": '" << message << "'" << std::endl;
     cast_channel::CastMessage msg;
     msg.set_payload_type(msg.STRING);
     msg.set_protocol_version(msg.CASTV2_1_0);
@@ -73,6 +74,16 @@ bool sendSimple(const Connection &conn, const msg::Type type, const ns::Namespac
     if (type >= msg::SimpleMessageCount) {
         return false;
     }
+    if (type == msg::GetStatus && mediaSession != "") {
+        return sendMessage(conn,
+                ns::strings[ns::Media],
+                "{ "
+                " \"type\": \"GET_STATUS\", "
+                " \"requestId\": " + std::to_string(s_requestId++) + ", "
+                " \"mediaSessionId\": \"" + mediaSession + "\""
+                "}"
+            );
+    }
     //if (type == msg::GetStatus) {
     //    return sendMessage(conn, ns::strings[urn], 
     //            "{\"type\": \"GET_STATUS\", \"requestId\": " + std::to_string(s_requestId++) + "}"
@@ -83,12 +94,16 @@ bool sendSimple(const Connection &conn, const msg::Type type, const ns::Namespac
 
 bool seek(const Connection &conn, double position)
 {
+    if (mediaSession.empty()) {
+        std::cerr << "Can't seek without media session" << std::endl;
+        return false;
+    }
     return sendMessage(conn,
             ns::strings[ns::Media],
             "{ "
             " \"type\": \"SEEK\", "
             " \"requestId\": " + std::to_string(s_requestId++) + ", "
-            " \"mediaSessionId\": " + dest + ", "
+            " \"mediaSessionId\": \"" + mediaSession + "\", "
             " \"currentTime\": " + std::to_string(position) +
             "}"
         );
