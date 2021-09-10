@@ -115,5 +115,26 @@ bool seek(const Connection &conn, double position)
         );
 }
 
+bool loadMedia(const Connection &conn, const std::string video, double position)
+{
+    if (video.empty()) {
+        puts("Can't load empty video");
+        return false;
+    }
+    return sendMessage(conn,
+            ns::strings[ns::Media],
+            "{ "
+            " \"type\": \"LOAD\", "
+            " \"requestId\": " + std::to_string(s_requestId++) + ", "
+            " \"media\": {"
+            "   \"contentId\": \"" + video + "\", "
+            "   \"streamType\": \"BUFFERED\", "
+            "   \"contentType\": \"x-youtube/video\" "
+            " }, "
+            " \"currentTime\": " + std::to_string(position) +
+            "}"
+        );
+}
+
 } //namespace cc
 

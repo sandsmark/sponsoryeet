@@ -1,5 +1,7 @@
 #pragma once
 
+#define WAIT_TIMEOUT
+
 namespace mdns {
 static const std::array<uint8_t, 12> queryHeader = {
     0x00, 0x00, // ID
@@ -127,12 +129,7 @@ std::string parsePacket(const std::string &data)
         return "";
     }
     int pos = queryHeader.size();
-
-    // No answers in packet
-    if (data[6] == 0 && data[7] == 0) {
-        puts(" - Packet with no query response (probably another request)");
-        return "";
-    }
+    bool validPacket = !(data[6] == 0 && data[7] == 0);
 
     std::string hostname;
     while (pos + 2 < data.size()) {
@@ -141,7 +138,7 @@ std::string parsePacket(const std::string &data)
 
         // Ends with a '.'
         if (length == 0) {
-            return hostname;
+            break;
         }
 
         const uint8_t nextPos = pos + length;
@@ -152,6 +149,15 @@ std::string parsePacket(const std::string &data)
         hostname += data.substr(pos, length) + ".";
 
         pos = nextPos;
+    }
+
+    if (s_verbose && pos + queryFooter.size() != data.size()) {
+        printf("Failed to parse entire packet (%d/%d)\n", pos, data.size());
+    }
+    // No answers in packet
+    if (data[6] == 0 && data[7] == 0) {
+        if (s_verbose) puts((" - Packet with no query response (probably another request) for " + hostname).c_str());
+        return "";
     }
 
     return hostname;
@@ -169,24 +175,41 @@ bool query(const int fd, sockaddr_in *address)
     sockaddr_storage addressStorage;
     socklen_t addressSize = sizeof(addressStorage);
 
+    time_t endTime = time(nullptr) + 10;
+
     do {
+        if (time(nullptr) > endTime) {
+            printf("\e[2K\r - Timeout waiting for mdns response, sending a new\n");
+            sendRequest(fd);
+            endTime = time(nullptr) + 10;
+            continue;
+        }
+
         fd_set fds;
         FD_ZERO(&fds);
         FD_SET(fd, &fds);
 
         timeval tv = {0};
-        tv.tv_sec = waitTime.count();
+        //tv.tv_usec = 100000; // 100ms, need dat nice spinner
+        tv.tv_sec = 1;
 
         int st = select(fd+1, &fds, nullptr, nullptr, &tv);
+        if (errno == EINTR) {
+            continue;
+        }
+        if (st == 0) {
+            static const char spinner[] = { '-', '\\', '|', '/', '-', '\\', '|', '/', };
+            static uint8_t spinnerPos = 0;
+            spinnerPos = (spinnerPos + 1) % sizeof(spinner);
+            printf("%c Waiting for response...", spinner[spinnerPos]);
+            fflush(stdout);
+            printf("\e[2K\r");
+            continue;
+        }
         if (st < 0) {
             if (errno != EINTR) {
                 perror(" ! Error while waiting to read");
             }
-            continue;
-        }
-        if (st == 0) {
-            puts(" - Timeout waiting for mdns response");
-            sendRequest(fd);
             continue;
         }
 
@@ -210,7 +233,9 @@ bool query(const int fd, sockaddr_in *address)
         }
 
         memcpy(address, &addressStorage, addressSize);
-        puts(" < Got response");
+        if (s_verbose) {
+            puts(" < Got response");
+        }
 
         packet.resize(size);
 
@@ -219,7 +244,9 @@ bool query(const int fd, sockaddr_in *address)
             continue;
         }
         if (name != queryName) {
-            std::cerr << " - Got wrong name '" << name << "' from " << inet_ntoa(address->sin_addr) << std::endl;
+            if (s_verbose) {
+                std::cerr << " - Got wrong name '" << name << "' from " << inet_ntoa(address->sin_addr) << std::endl;
+            }
             continue;
         }
 

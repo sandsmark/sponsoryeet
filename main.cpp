@@ -1,5 +1,6 @@
 static bool s_running = true;
 static bool s_verbose = false;
+static bool s_adblock = false;
 
 #define PROGRESS_WIDTH 40
 
@@ -65,6 +66,8 @@ static double s_lastPositionFetched = -1;
 static std::vector<Segment> currentSegments;
 static double nextSegmentStart = -1.;
 static bool currentlyPlaying = false;
+static time_t s_lastSeek = 0;
+static std::string s_currentStatus;
 
 
 static double currentPosition()
@@ -91,21 +94,26 @@ static double secondsUntilNextSegment()
         return -1;
     }
 
-    double lowestBegin = currentSegments[0].begin;
+    double lowestBegin = std::numeric_limits<double>::max();
+    bool found = false;
     for (const Segment &segment : currentSegments) {
         if (segment.end < current) {
             continue;
         }
-        if (segment.begin < lowestBegin) {
+        if (!found || segment.begin < lowestBegin) {
             lowestBegin = segment.begin;
+            found = true;
         }
+    }
+    if (!found) {
+        return -1;
     }
     return lowestBegin - current;
 }
 
 static double currentSegmentEnd()
 {
-    const double current = currentPosition();
+    const int current = std::ceil(currentPosition());
     if (current < 0) {
         return -1;
     }
@@ -113,9 +121,8 @@ static double currentSegmentEnd()
         return -1;
     }
 
-    double lowestBegin = currentSegments[0].begin;
     for (const Segment &segment : currentSegments) {
-        if (segment.end < current) {
+        if (int(segment.end) <= current) {
             continue;
         }
         if (segment.begin < current) {
@@ -145,14 +152,16 @@ static void maybeSeek(Connection *connection)
     if (!currentlyPlaying) {
         return;
     }
-    if (segmentEnd > 0) {
-        printf("\nSkipping sponsor...\n");
-        s_currentPosition = -1.;
-        nextSegmentStart = -1.;
-        s_lastPositionFetched = -1;
-        cc::seek(*connection, segmentEnd);
-        cc::sendSimple(*connection, cc::msg::GetStatus, cc::ns::Media);
+    if (time(nullptr) - s_lastSeek < 1) {
+        return;
     }
+    s_lastSeek = time(nullptr);
+
+    printf("\nSkipping sponsor...\n");
+    s_currentPosition = -1.;
+    nextSegmentStart = -1.;
+    s_lastPositionFetched = -1;
+    cc::seek(*connection, segmentEnd);
 }
 
 void printTimestamp(int timestamp)
@@ -168,18 +177,11 @@ void printTimestamp(int timestamp)
 void printProgress(double position, double length)
 {
     if (position < 0 || length < 0 || s_lastPositionFetched < 0) {
-        //static const char spinner[] = { '-', '\\', '|', '/', '-', '\\', '|', '/', };
-        //static uint8_t spinnerPos = 0;
-        //spinnerPos = (spinnerPos + 1) % sizeof(spinner);
-        //printf("\e[2K\r%c", spinner[spinnerPos]);
-        //printf("\rInvalid position or length");
-        //fflush(stdout);
+        printf(s_currentStatus.c_str());
+        fflush(stdout);
+        printf("\e[2K\r");
         return;
     }
-    //if (currentlyPlaying) {
-    //    double timeDelta = time(nullptr) - lastPositionFetched;
-    //    position = std::round(timeDelta + position);
-    //}
     printf("\r[");
     int playedLength = position * PROGRESS_WIDTH / length;
     if (playedLength > PROGRESS_WIDTH) {
@@ -187,6 +189,11 @@ void printProgress(double position, double length)
     }
     for (int i=0; i<playedLength; i++) {
         printf("=");
+    }
+    if (currentlyPlaying) {
+        printf(">");
+    } else {
+        printf("|");
     }
     for (int i=playedLength; i<PROGRESS_WIDTH; i++) {
         printf("-");
@@ -215,14 +222,11 @@ void printProgress(double position, double length)
     }
 
     fflush(stdout);
+    printf("\e[2K\r");
 }
 
 bool handleMessage(Connection *connection, const std::string &inputBuffer)
 {
-    if (inputBuffer.empty()) {
-        puts("Empty message");
-        return false;
-    }
     cast_channel::CastMessage message;
     if (!message.ParseFromString(inputBuffer)) {
         puts("PArsing failed");
@@ -232,9 +236,6 @@ bool handleMessage(Connection *connection, const std::string &inputBuffer)
     if (!message.has_payload_utf8()) {
         puts("No string payload");
         return true;
-    } else if (message.has_payload_binary()) {
-        puts("Got binary message, ignoring");
-        return true;
     }
     const std::string payload = message.payload_utf8();
     std::string type = regexExtract(R"--("type"\s*:\s*"([^"]+)")--", payload);
@@ -243,24 +244,29 @@ bool handleMessage(Connection *connection, const std::string &inputBuffer)
     }
 
     if (type == "CLOSE") {
+        s_currentStatus = "Disconnected";
         cc::sendSimple(*connection, cc::msg::Connect, cc::ns::Connection);
         return true;
     }
     if (type == "INVALID_REQUEST") {
+        s_currentStatus = "Error";
         std::cout << message.source_id() << " > " << message.destination_id() << " (" << message.namespace_() << "): \n" << message.payload_utf8() << std::endl;
         return false;
     }
 
     if (type == "MEDIA_STATUS") {
         extractNumber(R"--("duration"\s*:\s*([0-9.]+))--", payload, &currentDuration);
+        bool gotUpdatedPosition = false;
         if (extractNumber(R"--("currentTime"\s*:\s*([0-9.]+))--", payload, &s_currentPosition)) {
             s_lastPositionFetched = time(nullptr);
+            gotUpdatedPosition = true;
         }
-        std::string state = regexExtract(R"--("playerState"\s*:\s*"([A-Z]+)")--", payload);
+        const std::string state = regexExtract(R"--("playerState"\s*:\s*"([A-Z]+)")--", payload);
         if (!state.empty()) {
             currentlyPlaying = state == "PLAYING";
+            s_currentStatus = state;
         }
-        std::string mediaSession = regexExtract(R"--("mediaSessionId"\s*:\s*([0-9]+))--", payload);
+        const std::string mediaSession = regexExtract(R"--("mediaSessionId"\s*:\s*([0-9]+))--", payload);
         if (!mediaSession.empty()) {
             if (s_verbose) {
                 std::cout << "Got media session " << mediaSession << std::endl;
@@ -288,6 +294,21 @@ bool handleMessage(Connection *connection, const std::string &inputBuffer)
                 nextSegmentStart = time(nullptr) + delta;
             }
             maybeSeek(connection);
+            return true;
+        }
+
+        const std::string customState = regexExtract(R"--("playerState"\s*:\s*-?[0-9]+)--", payload);
+        if (s_verbose) {
+            std::cout << "Custom player state: " << customState << std::endl;
+        }
+        if (s_adblock && customState == "1081") {
+            std::cout << " Playing an ad, attempting to skip" << std::endl;
+            double position = currentPosition();
+            if (position < 0) {
+                position = 0;
+            }
+            position += 1; // attempt one second forward
+            cc::loadMedia(*connection, currentVideo, position);
         }
         return true;
     }
@@ -312,6 +333,8 @@ bool handleMessage(Connection *connection, const std::string &inputBuffer)
                     puts("Youtube playing");
                 }
                 cc::sendSimple(*connection, cc::msg::GetStatus, cc::ns::Media);
+            } else {
+                s_currentStatus = "Not youtube: '" + displayName + "'";
             }
         }
         return true;
@@ -327,10 +350,16 @@ int loop(const sockaddr_in &address)
 {
     cc::dest = "";
 
+    if (s_verbose) {
+        puts("Opening connection");
+    }
     Connection connection;
     if (!connection.connect(address)) {
         std::cerr << "Failed to connect to " << inet_ntoa(address.sin_addr) << std::endl;
         return errno;
+    }
+    if (s_verbose) {
+        puts("Sending connection message");
     }
     if (!cc::sendSimple(connection, cc::msg::Connect, cc::ns::Connection)) {
         puts("Failed to send connect message");
@@ -364,17 +393,22 @@ int loop(const sockaddr_in &address)
             perror("select()");
             return errno;
         }
-        if (errno == EINTR || events == 0) {
+        if (errno == EINTR) {
             continue;
         }
 
-        // debugging
-        if (errno) {
-            perror("errno while selecting");
+        if (events == 0) { // timeout
+            if (nextSegmentStart > 0 && nextSegmentStart <= time(nullptr)) {
+                nextSegmentStart = -1;
+                // Update to make sure we are in sync before we skip the sponsor
+                cc::sendSimple(connection, cc::msg::GetStatus, cc::ns::Media);
+            }
+
+            continue;
         }
 
         std::string msgLengthBuffer = connection.read(sizeof(uint32_t));
-        if (msgLengthBuffer.size() < 4) {
+        if (msgLengthBuffer.size() != 4) {
             std::cerr << "Failed to read message size: '" << msgLengthBuffer << "'" << std::endl;
             return EBADMSG;
         }
@@ -403,11 +437,6 @@ int loop(const sockaddr_in &address)
             puts("Disconnected");
             return ECONNRESET;
         }
-        double currentTime = time(nullptr);
-        if (nextSegmentStart > 0 && nextSegmentStart < currentTime) {
-            // Check if we need to seek
-            cc::sendSimple(connection, cc::msg::GetStatus, cc::ns::Media);
-        }
     }
     return 0;
 }
@@ -426,6 +455,12 @@ int main(int argc, char *argv[])
         const std::string arg = argv[i];
         if (arg == "-v" || arg == "--verbose") {
             s_verbose = true;
+        } else if (arg == "-a" || arg == "--adblock") {
+            s_adblock = true;
+        } else {
+            printf("Usage: %s [-a|--adblock] [-v|--verbose]\n", argv[0]);
+            puts("\t--adblock is basically untested and might not work, hence not on by default");
+            exit(EINVAL);
         }
     }
     signal(SIGINT, &signalHandler);
@@ -452,6 +487,7 @@ int main(int argc, char *argv[])
 
         // hide cursor
         printf("\e[?25l");
+        s_currentStatus = "Connecting...";
         ret = loop(address);
     }
 
