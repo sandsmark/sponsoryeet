@@ -53,10 +53,12 @@ std::vector<Segment> downloadSegments(const std::string &videoId)
             std::cout << "Invalid segment " << segmentsArray << std::endl;
             return {};
         }
-        std::cout << "Got segment " << numbers[0] << " -> " << numbers[1] << std::endl;
+        if (s_verbose) {
+            std::cout << "Got segment " << numbers[0] << " -> " << numbers[1] << std::endl;
+        }
         segments.push_back({numbers[0], numbers[1]});
     }
-    std::cout << "Got " << segments.size() << " segments for " << videoId << std::endl;
+    std::cout << " - Got " << segments.size() << " skip segments for " << videoId << std::endl;
 
     return segments;
 }

@@ -8,9 +8,12 @@ namespace cc
     static std::string dest;
     static std::string mediaSession;
 
-bool sendMessage(const Connection &conn, const std::string &ns, const std::string &message ) //, const std::string &dest = "")
+bool sendMessage(const Connection &conn, const std::string &ns, const std::string &message)
 {
-    //std::cout << "Sending '" << ns << ": '" << message << "'" << std::endl;
+    if (s_verbose) {
+        std::cout << "Sending '" << ns << ": '" << message << "'" << std::endl;
+    }
+
     cast_channel::CastMessage msg;
     msg.set_payload_type(msg.STRING);
     msg.set_protocol_version(msg.CASTV2_1_0);
@@ -84,12 +87,15 @@ bool sendSimple(const Connection &conn, const msg::Type type, const ns::Namespac
                 "}"
             );
     }
-    //if (type == msg::GetStatus) {
-    //    return sendMessage(conn, ns::strings[urn], 
-    //            "{\"type\": \"GET_STATUS\", \"requestId\": " + std::to_string(s_requestId++) + "}"
-    //            );
-    //}
-    return sendMessage(conn, ns::strings[urn], msgs[type]);
+
+    const bool wasVerbose = s_verbose;
+    if (type == msg::Ping || type == msg::Pong) {
+        // too much spam
+        s_verbose = false;
+    }
+    const bool ret = sendMessage(conn, ns::strings[urn], msgs[type]);
+    s_verbose = wasVerbose;
+    return ret;
 }
 
 bool seek(const Connection &conn, double position)

@@ -1,4 +1,5 @@
 static bool s_running = true;
+static bool s_verbose = false;
 
 #define PROGRESS_WIDTH 40
 
@@ -36,20 +37,6 @@ std::string regexExtract(const std::string &regexstr, const std::string &payload
         return "";
     }
     return match[1].str();
-}
-
-std::string getType(const std::string &payload)
-{
-    const std::regex typeRegex(R"--("type"\s*:\s*"([^"]+)")--");
-    std::smatch typeMatch;
-    if (!std::regex_search(payload, typeMatch, typeRegex) || typeMatch.size() != 2) {
-        std::cerr << "Failed to get type!" << std::endl;
-        return "";
-    }
-    std::string type = typeMatch[1].str();
-    std::cout << "type: " << type << std::endl;
-
-    return type;
 }
 
 bool extractNumber(const std::string &regex, const std::string &payload, double *number)
@@ -135,7 +122,6 @@ static double currentSegmentEnd()
             return segment.end;
         }
     }
-    //puts("Failed to find end of current segment");
     return -1;
 }
 
@@ -152,7 +138,9 @@ static void maybeSeek(Connection *connection)
     if (segmentEnd < 0) {
         return;
     }
-    //printf("Current segment ends at: %f, position at %f\n", segmentEnd, currentPosition());
+    if (s_verbose) {
+        printf("Current segment ends at: %f, position at %f\n", segmentEnd, currentPosition());
+    }
 
     if (!currentlyPlaying) {
         return;
@@ -250,8 +238,8 @@ bool handleMessage(Connection *connection, const std::string &inputBuffer)
     }
     const std::string payload = message.payload_utf8();
     std::string type = regexExtract(R"--("type"\s*:\s*"([^"]+)")--", payload);
-    if (type != "PING") {
-        //std::cout << message.source_id() << " > " << message.destination_id() << " (" << message.namespace_() << "): \n" << message.payload_utf8() << std::endl;
+    if (type != "PING" && s_verbose) {
+        std::cout << message.source_id() << " > " << message.destination_id() << " (" << message.namespace_() << "): \n" << message.payload_utf8() << std::endl;
     }
 
     if (type == "CLOSE") {
@@ -274,16 +262,17 @@ bool handleMessage(Connection *connection, const std::string &inputBuffer)
         }
         std::string mediaSession = regexExtract(R"--("mediaSessionId"\s*:\s*([0-9]+))--", payload);
         if (!mediaSession.empty()) {
-            //std::cout << "Got media session " << mediaSession << std::endl;
+            if (s_verbose) {
+                std::cout << "Got media session " << mediaSession << std::endl;
+            }
             cc::mediaSession = mediaSession;
         }
 
         // the ID is base64, but replaced / with - and + with _, and without padding
-        std::string videoID = regexExtract(R"--("contentId"\s*:\s*"([A-Za-z0-9_-]+)")--", payload);
-        //if (videoID.empty()) {
-        //    std::cerr << "Failed to find video id" << std::endl;
-        //    return true;
-        //}
+        const std::string videoID = regexExtract(R"--("contentId"\s*:\s*"([A-Za-z0-9_-]+)")--", payload);
+        if (s_verbose) {
+            std::cout << "Video id: '" << videoID << "'" << std::endl;
+        }
         if (!videoID.empty() && videoID != currentVideo) {
             currentSegments = downloadSegments(videoID);
             currentVideo = videoID;
@@ -292,7 +281,9 @@ bool handleMessage(Connection *connection, const std::string &inputBuffer)
 
         if (!currentSegments.empty()) {
             double delta = secondsUntilNextSegment();
-            std::cout << "time to next segment: " << delta << std::endl;
+            if (s_verbose) {
+                std::cout << "time to next segment: " << delta << std::endl;
+            }
             if (delta >= 0) {
                 nextSegmentStart = time(nullptr) + delta;
             }
@@ -311,17 +302,22 @@ bool handleMessage(Connection *connection, const std::string &inputBuffer)
         if (type == "RECEIVER_STATUS") {
             const std::string displayName = regexExtract(R"--("displayName"\s*:\s*"([^"]+)")--", payload);
             const std::string sessionId = regexExtract(R"--("sessionId"\s*:\s*"([^"]+)")--", payload);
-            std::cout << "got display name " << displayName << std::endl;
-            std::cout << "session: " <<  sessionId << std::endl;
+            if (s_verbose) {
+                std::cout << "app display name: " << displayName << std::endl;
+                std::cout << "session: " << sessionId << std::endl;
+            }
             cc::dest = sessionId;
             if (displayName == "YouTube") {
-                puts("Correct");
+                if (s_verbose) {
+                    puts("Youtube playing");
+                }
                 cc::sendSimple(*connection, cc::msg::GetStatus, cc::ns::Media);
             }
         }
         return true;
     }
-    std::cout << "Got type: " << type << std::endl;
+
+    std::cerr << "Unhandled message type: " << type << std::endl;
 
     return true;
 }
@@ -426,6 +422,12 @@ void signalHandler(int sig)
 
 int main(int argc, char *argv[])
 {
+    for (int i=1; i<argc; i++) {
+        const std::string arg = argv[i];
+        if (arg == "-v" || arg == "--verbose") {
+            s_verbose = true;
+        }
+    }
     signal(SIGINT, &signalHandler);
     signal(SIGTERM, &signalHandler);
     signal(SIGQUIT, &signalHandler);
