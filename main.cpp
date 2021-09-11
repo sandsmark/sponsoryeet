@@ -157,7 +157,7 @@ static void maybeSeek(Connection *connection)
     }
     s_lastSeek = time(nullptr);
 
-    printf("\nSkipping sponsor...\n");
+    puts("Skipping sponsor...");
     s_currentPosition = -1.;
     nextSegmentStart = -1.;
     s_lastPositionFetched = -1;
@@ -340,7 +340,9 @@ bool handleMessage(Connection *connection, const std::string &inputBuffer)
         return true;
     }
 
-    std::cerr << "Unhandled message type: " << type << std::endl;
+    if (type != "mdxSessionStatus") {
+        std::cerr << "Unhandled message type: " << type << std::endl;
+    }
 
     return true;
 }
