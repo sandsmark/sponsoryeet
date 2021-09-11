@@ -1,3 +1,5 @@
+![logo](/yeet.png)
+
 sponsoryeet
 ===========
 
