@@ -18,3 +18,4 @@ add_executable(sponsoryeet
     )
 
 target_link_libraries(sponsoryeet protobuf::libprotobuf OpenSSL::SSL)
+install(TARGETS sponsoryeet)
