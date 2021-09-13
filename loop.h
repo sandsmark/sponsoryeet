@@ -227,10 +227,11 @@ static bool handleMessage(Connection *connection, const std::string &inputBuffer
                 nextSegmentStart = time(nullptr) + delta;
             }
             maybeSeek(connection);
-            return true;
         }
 
-        const std::string customState = regexExtract(R"--("playerState"\s*:\s*-?[0-9]+)--", payload);
+        // If we detect that an ad is being played, try to re-open the video
+        // one second into the future.
+        const std::string customState = regexExtract(R"--("playerState"\s*:\s*(-?[0-9]+))--", payload);
         if (s_verbose) {
             std::cout << "Custom player state: " << customState << std::endl;
         }
