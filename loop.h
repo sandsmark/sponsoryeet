@@ -316,6 +316,7 @@ int loop(const sockaddr_in &address)
         puts("Failed to send getstatus message");
         return errno;
     }
+    s_lastPing = time(nullptr);
 
     while (s_running && !connection.eof) {
         fd_set fdset;
@@ -323,15 +324,8 @@ int loop(const sockaddr_in &address)
         FD_SET(connection.fd, &fdset);
         FD_SET(STDIN_FILENO, &fdset);
 
-        // idk, 1 second debug mostly for debugging
         timeval timeout;
-        //double currentTime = time(nullptr);
-        //if (nextSegmentStart > 0 && nextSegmentStart > currentTime) {
-        //    std::cout << "Next segment at " << nextSegmentStart << ", current time " << currentTime << std::endl;
-        //    timeout.tv_sec = nextSegmentStart - currentTime;
-        //} else {
-            timeout.tv_sec = 1;
-        //}
+        timeout.tv_sec = 1; // max 1 second so we can update the progress bar
         timeout.tv_usec = 0;
         const int events = select(connection.fd + 1, &fdset, 0, 0, &timeout);
         printProgress(currentPosition(), currentDuration);
@@ -372,6 +366,18 @@ int loop(const sockaddr_in &address)
                 // Update to make sure we are in sync before we skip the sponsor
                 cc::sendSimple(connection, cc::msg::GetStatus, cc::ns::Media);
             }
+
+            const time_t currentTime = time(nullptr);
+            if (currentTime - s_lastPing > PING_INTERVAL) {
+                if (s_verbose) {
+                    std::cout << "Sending ping, last ping: " << s_lastPing << " current time: " << currentTime << " delta: " << (currentTime - s_lastPing) << std::endl;
+                }
+                if (!cc::sendSimple(connection, cc::msg::Ping, cc::ns::Heartbeat)) {
+                    puts("Failed to send ping, assuming disconnected");
+                    return ETIMEDOUT;
+                }
+                s_lastPing = time(nullptr);
+            }
         }
 
         if (!FD_ISSET(connection.fd, &fdset)) {
@@ -408,6 +414,9 @@ int loop(const sockaddr_in &address)
             puts("Disconnected");
             return ECONNRESET;
         }
+
+        // We got a valid message
+        s_lastPing = time(nullptr);
     }
     return 0;
 }

@@ -1,4 +1,5 @@
 #define PROGRESS_WIDTH 40
+#define PING_INTERVAL 30
 
 extern "C" {
 #include <sys/socket.h>

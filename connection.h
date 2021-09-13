@@ -3,6 +3,7 @@
 extern "C" {
 #include <openssl/ssl.h>
 #include <netdb.h>
+#include <netinet/tcp.h>
 }
 
 #include <cassert>
@@ -43,9 +44,15 @@ struct Connection
             perror("Failed to open socket");
             return false;
         }
+        int timeout = PING_INTERVAL * 1000;
+        int ret = ::setsockopt(fd, IPPROTO_TCP, TCP_USER_TIMEOUT, &timeout, sizeof timeout);
+        if (ret != 0) {
+            perror("Failed to set socket timeout");
+            return false;
+        }
 
         std::string addressString = std::string(inet_ntoa(address.sin_addr)) + ":" + std::to_string(ntohs(address.sin_port));
-        int ret = ::connect(fd, (const struct sockaddr*)(&address),sizeof(address));
+        ret = ::connect(fd, (const struct sockaddr*)(&address), sizeof address);
         if (ret != 0) {
             perror(("Failed to connect to " + addressString).c_str());
             return false;

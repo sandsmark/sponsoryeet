@@ -21,4 +21,5 @@ static double currentDuration = -1.;
 static double s_lastPositionFetched = -1;
 static bool currentlyPlaying = false;
 static time_t s_lastSeek = 0;
+static time_t s_lastPing = 0;
 static std::string s_currentStatus;
