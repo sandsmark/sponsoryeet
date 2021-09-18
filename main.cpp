@@ -6,6 +6,7 @@ extern "C" {
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <signal.h>
+#include <termios.h>
 }
 
 #include <cstdio>
@@ -34,7 +35,6 @@ void signalHandler(int sig)
 {
     signal(sig, SIG_DFL);
     s_running = false;
-    printf("\e[?25h"); // re-enable cursor
     puts("Bye");
 }
 
@@ -55,6 +55,13 @@ int main(int argc, char *argv[])
     signal(SIGINT, &signalHandler);
     signal(SIGTERM, &signalHandler);
     signal(SIGQUIT, &signalHandler);
+
+    termios origTermios;
+    tcgetattr(STDIN_FILENO, &origTermios);
+
+    termios newTermios = origTermios;
+    newTermios.c_lflag &= ~(ECHO | ICANON);
+    tcsetattr(STDIN_FILENO, TCSANOW, &newTermios);
 
     int ret = 0;
     while (s_running) {
@@ -80,6 +87,8 @@ int main(int argc, char *argv[])
         ret = loop(address);
     }
 
+    printf("\e[?25h"); // re-enable cursor
+    tcsetattr(STDIN_FILENO, TCSANOW, &origTermios);
 
     return ret;
 }

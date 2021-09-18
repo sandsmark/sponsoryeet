@@ -204,6 +204,9 @@ static bool handleMessage(Connection *connection, const std::string &inputBuffer
             cc::mediaSession = mediaSession;
         }
 
+        if (!s_youtube) {
+            return true;
+        }
         // the ID is base64, but replaced / with - and + with _, and without padding
         const std::string videoID = regexExtract(R"--("contentId"\s*:\s*"([A-Za-z0-9_-]+)")--", payload);
         if (s_verbose) {
@@ -259,12 +262,21 @@ static bool handleMessage(Connection *connection, const std::string &inputBuffer
             }
             cc::dest = sessionId;
             if (displayName == "YouTube") {
+                s_youtube = true;
                 if (s_verbose) {
                     puts("Youtube playing");
                 }
-                cc::sendSimple(*connection, cc::msg::GetStatus, cc::ns::Media);
             } else {
+                s_youtube = false;
                 s_currentStatus = "Not youtube: '" + displayName + "'";
+            }
+
+            if (payload.find("urn:x-cast:com.google.cast.media") != std::string::npos) {
+                if (s_verbose) puts("Sending get status for media");
+                // First reconnect with session id
+                cc::sendSimple(*connection, cc::msg::Connect, cc::ns::Connection);
+                // Then get proper media status
+                cc::sendSimple(*connection, cc::msg::GetStatus, cc::ns::Media);
             }
         }
         return true;
@@ -307,6 +319,7 @@ int loop(const sockaddr_in &address)
         fd_set fdset;
         FD_ZERO(&fdset);
         FD_SET(connection.fd, &fdset);
+        FD_SET(STDIN_FILENO, &fdset);
 
         // idk, 1 second debug mostly for debugging
         timeval timeout;
@@ -326,6 +339,32 @@ int loop(const sockaddr_in &address)
             return errno;
         }
         if (errno == EINTR) {
+            continue;
+        }
+
+        if (FD_ISSET(STDIN_FILENO, &fdset)) {
+            const int key = getchar();
+            switch(key) {
+            case 'q':
+            case '\x1b':
+                s_running = false;
+                return 0;
+            case ' ':
+                if (s_currentStatus == "PLAYING") {
+                    puts("Pausing");
+                    cc::sendSimpleMedia(connection, "PAUSE");
+                } else if (s_currentStatus == "PAUSED") {
+                    puts("Resuming playback");
+                    cc::sendSimpleMedia(connection, "PLAY");
+                }
+                break;
+            default:
+                if (s_verbose) printf("Unhandled key 0x%x\n", key);
+                break;
+            }
+        }
+
+        if (!FD_ISSET(connection.fd, &fdset)) {
             continue;
         }
 

@@ -11,7 +11,7 @@ namespace cc
 bool sendMessage(const Connection &conn, const std::string &ns, const std::string &message)
 {
     if (s_verbose) {
-        std::cout << "Sending '" << ns << ": '" << message << "'" << std::endl;
+        std::cout << "Sending to '" << dest << "': '" << ns << ": '" << message << "'" << std::endl;
     }
 
     cast_channel::CastMessage msg;
@@ -114,6 +114,23 @@ bool seek(const Connection &conn, double position)
             "}"
         );
 }
+
+bool sendSimpleMedia(const Connection &conn, const std::string &command)
+{
+    if (mediaSession.empty()) {
+        std::cerr << "Can't seek without media session" << std::endl;
+        return false;
+    }
+    return sendMessage(conn,
+            ns::strings[ns::Media],
+            "{ "
+            " \"type\": \"" + command + "\", "
+            " \"requestId\": " + std::to_string(s_requestId++) + ", "
+            " \"mediaSessionId\": \"" + mediaSession + "\" "
+            "}"
+        );
+}
+
 
 bool loadMedia(const Connection &conn, const std::string video, double position)
 {

@@ -5,6 +5,7 @@
 static bool s_running = true;
 static bool s_verbose = false;
 static bool s_adblock = false;
+static bool s_youtube = false;
 
 struct Segment {
     double begin = 0.;
