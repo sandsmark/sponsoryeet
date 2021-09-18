@@ -2,11 +2,6 @@
 #include <iostream>
 #include <regex>
 
-struct Segment {
-    double begin = 0.;
-    double end = 0.;
-};
-
 static std::vector<double> splitToDouble(std::string string)
 {
     for (char &c : string) {
