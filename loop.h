@@ -241,6 +241,7 @@ static bool handleMessage(Connection *connection, const std::string &inputBuffer
                 position = 0;
             }
             position += 1; // attempt one second forward
+            cc::sendSimpleMedia(*connection, "STOP");
             cc::loadMedia(*connection, currentVideo, position);
         }
         return true;
@@ -364,17 +365,15 @@ int loop(const sockaddr_in &address)
             }
         }
 
-        if (!FD_ISSET(connection.fd, &fdset)) {
-            continue;
-        }
-
         if (events == 0) { // timeout
             if (nextSegmentStart > 0 && nextSegmentStart <= time(nullptr)) {
                 nextSegmentStart = -1;
                 // Update to make sure we are in sync before we skip the sponsor
                 cc::sendSimple(connection, cc::msg::GetStatus, cc::ns::Media);
             }
+        }
 
+        if (!FD_ISSET(connection.fd, &fdset)) {
             continue;
         }
 
