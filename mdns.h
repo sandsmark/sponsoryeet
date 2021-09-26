@@ -125,13 +125,19 @@ std::string parsePacket(const std::string &data)
 {
     constexpr size_t minSize = queryHeader.size() + 4; // idk
     if (data.size() < minSize) {
-        std::cerr << "Packet too small (" << data.size() << " bytes)" << std::endl;
+        if (s_verbose) {
+            std::cerr << "Packet too small (" << data.size() << " bytes)" << std::endl;
+        }
         return "";
     }
-    int pos = queryHeader.size();
-    bool validPacket = !(data[6] == 0 && data[7] == 0);
+
+    const bool hasResponse = !(data[6] == 0 && data[7] == 0);
+    if (!s_verbose && !hasResponse) { // if verbose mode is on, parse the name anyways
+        return "";
+    }
 
     std::string hostname;
+    int pos = queryHeader.size();
     while (pos + 2 < data.size()) {
         const uint8_t length = data[pos];
         pos++;
@@ -176,12 +182,14 @@ bool query(const int fd, sockaddr_in *address)
     socklen_t addressSize = sizeof(addressStorage);
 
     time_t endTime = time(nullptr) + 10;
+    int pingTries = 0;
 
     do {
         if (time(nullptr) > endTime) {
             printf("\e[2K\r - Timeout waiting for mdns response, sending a new\n");
             sendRequest(fd);
             endTime = time(nullptr) + 10;
+            pingTries++;
             continue;
         }
 
@@ -201,9 +209,10 @@ bool query(const int fd, sockaddr_in *address)
             static const char spinner[] = { '-', '\\', '|', '/', '-', '\\', '|', '/', };
             static uint8_t spinnerPos = 0;
             spinnerPos = (spinnerPos + 1) % sizeof(spinner);
-            printf("%c Waiting for response...", spinner[spinnerPos]);
+            printf("%c Waiting for response", spinner[spinnerPos]);
+            for (int i=0; i<pingTries % 10; i++) printf(".");
             fflush(stdout);
-            printf("\e[2K\r");
+            printf("\e[2K\r"); // Erase the line, which won't be visible until the next flush
             continue;
         }
         if (st < 0) {
