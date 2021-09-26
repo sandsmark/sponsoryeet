@@ -170,7 +170,6 @@ std::string parsePacket(const std::string &data)
 bool query(const int fd, sockaddr_in *address)
 {
     // TODO: continously loop and update when new devices appear
-    static constexpr std::chrono::seconds waitTime (10);
 
     const std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
 
