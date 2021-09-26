@@ -77,7 +77,7 @@ int main(int argc, char *argv[])
             puts("Disconnected, sleeping and re-connecting");
             sleep(10);
         }
-        sockaddr_in address;
+        sockaddr_in address{};
         if (!mdns::findChromecast(&address)) {
             return ENOENT;
         }

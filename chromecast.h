@@ -132,7 +132,7 @@ bool sendSimpleMedia(const Connection &conn, const std::string &command)
 }
 
 
-bool loadMedia(const Connection &conn, const std::string video, double position)
+bool loadMedia(const Connection &conn, const std::string &video, double position)
 {
     if (video.empty()) {
         puts("Can't load empty video");
