@@ -82,7 +82,7 @@ int openSocket()
 }
 bool sendData(const int fd, const std::vector<uint8_t> &data)
 {
-    sockaddr_in broadcastAddr = {0, 0, 0, 0};
+    sockaddr_in broadcastAddr{};
     broadcastAddr.sin_family = AF_INET;
     broadcastAddr.sin_port = htons(5353);
     inet_aton("224.0.0.251", &broadcastAddr.sin_addr);

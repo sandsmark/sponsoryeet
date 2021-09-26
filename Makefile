@@ -8,7 +8,7 @@ OBJECTS=$(patsubst %.cc, %.o, $(CXXFILES))
 LDFLAGS+=-lprotobuf -lssl
 CXXFLAGS+=-Wall -Wextra -pedantic -std=c++17 -fPIC -g
 
-all: $(EXECUTABLE)
+all: $(PBHFILES) $(EXECUTABLE)
 
 %.o: %.cc Makefile $(PBHFILES)
 	$(CXX) -MD -MP $(CXXFLAGS) -o $@ -c $<
@@ -20,7 +20,7 @@ all: $(EXECUTABLE)
 DEPS=$(OBJECTS:.o=.d)
 -include $(DEPS)
 
-$(EXECUTABLE): $(OBJECTS) $(PBHFILES)
+$(EXECUTABLE): $(OBJECTS)
 	$(CXX) -o $@ $^ $(LDFLAGS) $(CXXFLAGS)
 
 clean:

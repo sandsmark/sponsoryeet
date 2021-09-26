@@ -107,7 +107,7 @@ static void printTimestamp(int timestamp)
 static void printProgress(double position, double length)
 {
     if (position < 0 || length < 0 || s_lastPositionFetched < 0) {
-        printf(s_currentStatus.c_str());
+        printf("%s", s_currentStatus.c_str());
         fflush(stdout);
         printf("\033[2K\r");
         return;
