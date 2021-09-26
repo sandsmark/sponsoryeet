@@ -83,12 +83,12 @@ int main(int argc, char *argv[])
         }
 
         // hide cursor
-        printf("\e[?25l");
+        printf("\033[?25l");
         s_currentStatus = "Connecting...";
         ret = loop(address);
     }
 
-    printf("\e[?25h"); // re-enable cursor
+    printf("\033[?25h"); // re-enable cursor
     tcsetattr(STDIN_FILENO, TCSANOW, &origTermios);
 
     return ret;

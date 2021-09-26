@@ -82,7 +82,7 @@ int openSocket()
 }
 bool sendData(const int fd, const std::vector<uint8_t> &data)
 {
-    sockaddr_in broadcastAddr = {0};
+    sockaddr_in broadcastAddr = {0, 0, 0, 0};
     broadcastAddr.sin_family = AF_INET;
     broadcastAddr.sin_port = htons(5353);
     inet_aton("224.0.0.251", &broadcastAddr.sin_addr);
@@ -135,7 +135,7 @@ std::string parsePacket(const std::string &data)
     }
 
     std::string hostname;
-    int pos = queryHeader.size();
+    size_t pos = queryHeader.size();
     while (pos + 2 < data.size()) {
         const uint8_t length = data[pos];
         pos++;
@@ -156,7 +156,7 @@ std::string parsePacket(const std::string &data)
     }
 
     if (s_verbose && pos + queryFooter.size() != data.size()) {
-        printf("Failed to parse entire packet (%d/%d), hostname: %s\n", pos, data.size(), hostname.c_str());
+        printf("Failed to parse entire packet (%lu/%lu), hostname: %s\n", pos, data.size(), hostname.c_str());
     }
     // No answers in packet
     if (!hasResponse) {
@@ -171,8 +171,6 @@ bool query(const int fd, sockaddr_in *address)
 {
     // TODO: continously loop and update when new devices appear
 
-    const std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
-
     std::string packet(512, '\0');
 
     sockaddr_storage addressStorage;
@@ -183,7 +181,7 @@ bool query(const int fd, sockaddr_in *address)
 
     do {
         if (time(nullptr) > endTime) {
-            printf("\e[2K\r - Timeout waiting for mdns response, sending a new\n");
+            printf("\033[2K\r - Timeout waiting for mdns response, sending a new\n");
             sendRequest(fd);
             endTime = time(nullptr) + 10;
             pingTries++;
@@ -194,7 +192,7 @@ bool query(const int fd, sockaddr_in *address)
         FD_ZERO(&fds);
         FD_SET(fd, &fds);
 
-        timeval tv = {0};
+        timeval tv = {0, 0};
         //tv.tv_usec = 100000; // 100ms, need dat nice spinner
         tv.tv_sec = 1;
 
@@ -209,7 +207,7 @@ bool query(const int fd, sockaddr_in *address)
             printf("%c Waiting for response", spinner[spinnerPos]);
             for (int i=0; i<pingTries % 10; i++) printf(".");
             fflush(stdout);
-            printf("\e[2K\r"); // Erase the line, which won't be visible until the next flush
+            printf("\033[2K\r"); // Erase the line, which won't be visible until the next flush
             continue;
         }
         if (st < 0) {

@@ -109,7 +109,7 @@ static void printProgress(double position, double length)
     if (position < 0 || length < 0 || s_lastPositionFetched < 0) {
         printf(s_currentStatus.c_str());
         fflush(stdout);
-        printf("\e[2K\r");
+        printf("\033[2K\r");
         return;
     }
     printf("\r[");
@@ -140,9 +140,9 @@ static void printProgress(double position, double length)
             start = PROGRESS_WIDTH - 1;
         }
         // Seek to the start of the bar
-        printf("\r\e[C");
+        printf("\r\033[C");
         for (int i=0; i<start; i++) {
-            printf("\e[C");
+            printf("\033[C");
         }
 
         const int segmentLength = std::max<int>(PROGRESS_WIDTH * (segment.end - segment.begin) / length, 1);
@@ -152,7 +152,7 @@ static void printProgress(double position, double length)
     }
 
     fflush(stdout);
-    printf("\e[2K\r");
+    printf("\033[2K\r");
 }
 
 static bool handleMessage(Connection *connection, const std::string &inputBuffer)
@@ -186,10 +186,8 @@ static bool handleMessage(Connection *connection, const std::string &inputBuffer
 
     if (type == "MEDIA_STATUS") {
         extractNumber(R"--("duration"\s*:\s*([0-9.]+))--", payload, &currentDuration);
-        bool gotUpdatedPosition = false;
         if (extractNumber(R"--("currentTime"\s*:\s*([0-9.]+))--", payload, &s_currentPosition)) {
             s_lastPositionFetched = time(nullptr);
-            gotUpdatedPosition = true;
         }
         const std::string state = regexExtract(R"--("playerState"\s*:\s*"([A-Z]+)")--", payload);
         if (!state.empty()) {
