@@ -12,7 +12,7 @@ protobuf_generate_cpp(protobufs_SRC protobufs_HDR
     cast_channel.proto
     )
 add_executable(sponsoryeet
-    main.cpp
+    main.cc
     ${protobufs_SRC}
     ${protobufs_HDR}
     )
