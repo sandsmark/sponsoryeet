@@ -125,9 +125,7 @@ std::string parsePacket(const std::string &data)
 {
     constexpr size_t minSize = queryHeader.size() + 4; // idk
     if (data.size() < minSize) {
-        if (s_verbose) {
-            std::cerr << "Packet too small (" << data.size() << " bytes)" << std::endl;
-        }
+        if (s_verbose) std::cerr << "Packet too small (" << data.size() << " bytes)" << std::endl;
         return "";
     }
 
@@ -149,7 +147,7 @@ std::string parsePacket(const std::string &data)
 
         const uint8_t nextPos = pos + length;
         if (nextPos >= data.size()) {
-            std::cerr << " ! Invalid packet, next pos out of range (" << size_t(nextPos) << " max: " << data.size() << ")" << std::endl;
+            if (s_verbose) std::cerr << " ! Invalid packet, next pos out of range (" << size_t(nextPos) << " max: " << data.size() << ")" << std::endl;
             return "";
         }
         hostname += data.substr(pos, length) + ".";
@@ -158,10 +156,10 @@ std::string parsePacket(const std::string &data)
     }
 
     if (s_verbose && pos + queryFooter.size() != data.size()) {
-        printf("Failed to parse entire packet (%d/%d)\n", pos, data.size());
+        printf("Failed to parse entire packet (%d/%d), hostname: %s\n", pos, data.size(), hostname.c_str());
     }
     // No answers in packet
-    if (data[6] == 0 && data[7] == 0) {
+    if (!hasResponse) {
         if (s_verbose) puts((" - Packet with no query response (probably another request) for " + hostname).c_str());
         return "";
     }
