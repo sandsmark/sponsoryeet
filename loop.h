@@ -262,13 +262,15 @@ static bool handleMessage(Connection *connection, const std::string &inputBuffer
                 std::cout << "app display name: " << displayName << std::endl;
                 std::cout << "session: " << sessionId << std::endl;
             }
-            cc::dest = sessionId;
+            if (!sessionId.empty()) {
+                cc::dest = sessionId;
+            }
             if (displayName == "YouTube") {
                 s_youtube = true;
                 if (s_verbose) {
                     puts("Youtube playing");
                 }
-            } else {
+            } else if (!displayName.empty()) {
                 s_youtube = false;
                 s_currentStatus = "Not youtube: '" + displayName + "'";
             }
