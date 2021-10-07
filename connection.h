@@ -111,6 +111,10 @@ static std::string downloadFile(const std::string &hostname, const int port, con
     serverAddress.sin_family = AF_INET;
     serverAddress.sin_port = htons(port);
 
+    if (s_verbose) {
+        printf("Downloading: %s:%d/%s\n", hostname.c_str(), port, filePath.c_str());
+    }
+
     struct hostent *hostinfo = gethostbyname(hostname.c_str());
 
     if (hostinfo == nullptr) {

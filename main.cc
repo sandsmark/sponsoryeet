@@ -35,17 +35,43 @@ void signalHandler(int sig)
 
 int main(int argc, char *argv[])
 {
+    static std::unordered_map<std::string, std::string> categories = {
+        { "--sponsor", "Paid promotion, paid referrals and direct advertisements." },
+        { "--selfpromo", "Unpaid or self promotion. Includes sections about merchandise, donations, or information about who they collaborated with." },
+        { "--interaction", "Reminders to like, subscribe or follow them in the middle of content." },
+        { "--intro", "An interval without actual content. Pauses, static frames, repeating animations. Not transitions containing information." },
+        { "--outro", "Credits or when the YouTube endcards appear. Not conclusions with information." },
+        { "--preview", "Quick recap of previous episodes, or a preview of what's coming up later in the current video. Edited together clips, not spoken summaries." },
+        { "--music_offtopic", "Only in music videos. Non-music sections of music videos that aren't already covered by another category." },
+    };
     for (int i=1; i<argc; i++) {
         const std::string arg = argv[i];
         if (arg == "-v" || arg == "--verbose") {
             s_verbose = true;
+        } else if (arg == "--all-categories") {
+            for (const std::pair<std::string, std::string> &category : categories) {
+                s_categories.insert(category.first.substr(2));
+            }
         } else if (arg == "-a" || arg == "--adblock") {
             s_adblock = true;
+        } else if (categories.count(arg)) {
+            s_categories.insert(arg.substr(2));
         } else {
-            printf("Usage: %s [-a|--adblock] [-v|--verbose]\n", argv[0]);
-            puts("\t--adblock is basically untested and might not work, hence not on by default");
+            printf("Usage: %s [-a|--adblock] [-v|--verbose] [--all-categories]\n", argv[0]);
+            puts("You may also specify which categories you want to skip, defaults to just sponsors:");
+            for (const std::pair<std::string, std::string> &category : categories) {
+                printf("  %s: %s\n", category.first.c_str(), category.second.c_str());
+            }
+            puts("\n--adblock is basically untested and might not work, hence not on by default");
             exit(EINVAL);
         }
+    }
+    if (!s_categories.empty()) {
+        printf("  Skipping these categories: ");
+        for (const std::string &category : s_categories) {
+            printf("%s ", category.c_str());
+        }
+        puts("");
     }
     signal(SIGINT, &signalHandler);
     signal(SIGTERM, &signalHandler);

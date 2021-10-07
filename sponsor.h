@@ -31,7 +31,12 @@ std::vector<Segment> downloadSegments(const std::string &videoId)
         puts("Got empty videoId");
         return {};
     }
-    std::string json = downloadFile("sponsor.ajay.app", 443, "/api/skipSegments?videoID=" + videoId);
+    std::string query = "?videoID=" + videoId;
+    for (const std::string &category : s_categories) {
+        query += "&category=" + category;
+    }
+
+    std::string json = downloadFile("sponsor.ajay.app", 443, "/api/skipSegments" + query);
     if (json.empty()) {
         puts("Failed to download segments to skip");
         return {};

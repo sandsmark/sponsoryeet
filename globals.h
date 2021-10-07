@@ -2,6 +2,7 @@
 
 #include <string>
 #include <vector>
+#include <set>
 
 #define PROGRESS_WIDTH 40
 #define PING_INTERVAL 30
@@ -27,3 +28,5 @@ static bool currentlyPlaying = false;
 static time_t s_lastSeek = 0;
 static time_t s_lastPing = 0;
 static std::string s_currentStatus;
+
+static std::set<std::string> s_categories;
