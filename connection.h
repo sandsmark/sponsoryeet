@@ -1,9 +1,19 @@
 #pragma once
 
+#include "globals.h"
+
+#include <string>
+#include <iostream>
+#include <cstring>
+
 extern "C" {
+#include <unistd.h>
 #include <openssl/ssl.h>
 #include <netdb.h>
 #include <netinet/tcp.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <sys/socket.h>
 }
 
 #include <cassert>

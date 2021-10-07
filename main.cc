@@ -1,10 +1,4 @@
-#define PROGRESS_WIDTH 40
-#define PING_INTERVAL 30
-
 extern "C" {
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
 #include <unistd.h>
 #include <signal.h>
 #include <termios.h>
@@ -78,8 +72,11 @@ int main(int argc, char *argv[])
             sleep(10);
         }
         sockaddr_in address{};
+
+
         if (!mdns::findChromecast(&address)) {
-            return ENOENT;
+            ret = ENOENT;
+            break;
         }
 
         // hide cursor

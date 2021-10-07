@@ -2,8 +2,24 @@
 
 #define WAIT_TIMEOUT
 
+#include "globals.h"
+
+#include <cstdint>
+#include <cstring>
+#include <array>
+#include <string>
+#include <vector>
+#include <iostream>
+
+extern "C" {
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <unistd.h>
+#include <arpa/inet.h>
+}
+
 namespace mdns {
-static const std::array<uint8_t, 12> queryHeader = {
+static constexpr std::array<uint8_t, 12> queryHeader = {
     0x00, 0x00, // ID
     0x00, 0x00, // Flags
     0x00, 0x01, // Query RRs
@@ -11,16 +27,12 @@ static const std::array<uint8_t, 12> queryHeader = {
     0x00, 0x00, // Authority RRs
     0x00, 0x00  // Additional RRs
 };
-static const std::array<uint8_t, 4> queryFooter = {
+static constexpr std::array<uint8_t, 4> queryFooter = {
     0x00, 0x0c, // QTYPE
     0x00, 0x01  // QCLASS
 };
 
 static const std::string queryName = "_googlecast._tcp.local.";
-static const std::vector<std::string> queryNameComponents = {
-    //pre-split for convenience
-    "_googlecast", "_tcp", "local", ""
-};
 
 int openSocket()
 {
@@ -110,13 +122,13 @@ bool sendRequest(const int fd)
     std::vector<uint8_t> data;
     data.insert(data.end(), queryHeader.begin(), queryHeader.end());
 
-    for (const std::string &component : queryNameComponents) {
+    for (const std::string &component : stringSplit(queryName, '.')) {
         data.push_back(uint8_t(component.size()));
         data.insert(data.end(), component.begin(), component.end());
     }
 
     data.insert(data.end(), queryFooter.begin(), queryFooter.end());
-    puts(" > Sending request....");
+    if (s_verbose) puts(" > Sending request....");
 
     return sendData(fd, data);
 }
@@ -181,7 +193,7 @@ bool query(const int fd, sockaddr_in *address)
 
     do {
         if (time(nullptr) > endTime) {
-            printf("\033[2K\r - Timeout waiting for mdns response, sending a new\n");
+            if (s_verbose) printf("\033[2K\r - Timeout waiting for mdns response, sending a new\n");
             sendRequest(fd);
             endTime = time(nullptr) + 10;
             pingTries++;
@@ -191,6 +203,7 @@ bool query(const int fd, sockaddr_in *address)
         fd_set fds;
         FD_ZERO(&fds);
         FD_SET(fd, &fds);
+        FD_SET(STDIN_FILENO, &fds);
 
         timeval tv = {0, 0};
         //tv.tv_usec = 100000; // 100ms, need dat nice spinner
@@ -214,6 +227,22 @@ bool query(const int fd, sockaddr_in *address)
             if (errno != EINTR) {
                 perror(" ! Error while waiting to read");
             }
+            continue;
+        }
+
+        if (FD_ISSET(STDIN_FILENO, &fds)) {
+            const int key = getchar();
+            switch(key) {
+            case 'q':
+            case '\x1b':
+                puts("Aborted");
+                return false;
+            default:
+                if (s_verbose) printf("Unhandled key 0x%x\n", key);
+                break;
+            }
+        }
+        if (!FD_ISSET(fd, &fds)) {
             continue;
         }
 
@@ -274,7 +303,9 @@ static bool findChromecast(sockaddr_in *address)
     close(fd);
 
     if (!found) {
-        perror("Failed to find chromecast");
+        if (errno) {
+            perror("Failed to find chromecast");
+        }
         return false;
     }
     address->sin_port = htons(8009);

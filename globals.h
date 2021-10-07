@@ -1,6 +1,10 @@
 #pragma once
 
 #include <string>
+#include <vector>
+
+#define PROGRESS_WIDTH 40
+#define PING_INTERVAL 30
 
 static bool s_running = true;
 static bool s_verbose = false;

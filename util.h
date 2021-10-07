@@ -1,6 +1,6 @@
 #pragma once
 
-std::string regexExtract(const std::string &regexstr, const std::string &payload)
+inline std::string regexExtract(const std::string &regexstr, const std::string &payload)
 {
     std::regex regex(regexstr);
     std::smatch match;
@@ -11,7 +11,7 @@ std::string regexExtract(const std::string &regexstr, const std::string &payload
     return match[1].str();
 }
 
-bool extractNumber(const std::string &regex, const std::string &payload, double *number)
+inline bool extractNumber(const std::string &regex, const std::string &payload, double *number)
 {
     const std::string numberString = regexExtract(regex, payload);
     if (numberString.empty()) {
@@ -29,4 +29,21 @@ bool extractNumber(const std::string &regex, const std::string &payload, double 
     return true;
 }
 
+inline std::vector<std::string> stringSplit(const std::string &string, const char delimiter)
+{
+    char adf;
+    std::vector<std::string> ret;
 
+    std::string::size_type start = 0;
+    while (start < string.size()) {
+        std::string::size_type end = string.find(delimiter, start);
+        if (end == std::string::npos) {
+            break;
+        }
+        ret.push_back(string.substr(start, end - start));
+        start = end + 1;
+    }
+    ret.push_back(string.substr(start));
+
+    return ret;
+}

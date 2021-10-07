@@ -1,5 +1,9 @@
 #pragma once
 
+#include <iostream>
+#include "globals.h"
+#include "chromecast.h"
+
 static double currentPosition()
 {
     if (!currentlyPlaying) {
