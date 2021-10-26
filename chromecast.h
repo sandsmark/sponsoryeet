@@ -2,8 +2,8 @@
 
 #include "globals.h"
 #include "connection.h"
-#include "cast_channel.pb.h"
 #include "castchannel.h"
+#include <fstream>
 
 namespace cc
 {
@@ -16,22 +16,25 @@ bool sendMessage(const Connection &conn, const std::string &ns, const std::strin
         std::cout << "Sending to '" << dest << "': '" << ns << ": '" << message << "'" << std::endl;
     }
 
-    cast_channel::CastMessage msg;
-    msg.set_payload_type(msg.STRING);
-    msg.set_protocol_version(msg.CASTV2_1_0);
-    msg.set_namespace_(ns);
-    msg.set_source_id("sender-0");
-    msg.set_destination_id(dest.empty() ? "receiver-0" : dest);
-    msg.set_payload_utf8(message);
+    CastMessage msg;
+    msg._payload_type = CastMessage::STRING;
+    msg._protocol_version = CastMessage::CASTV2_1_0;
+    msg._namespace = ns;
+    msg._source_id = "sender-0";
+    msg._destination_id = dest.empty() ? "receiver-0" : dest;
+    msg._payload_utf8 = message;
 
-    const uint32_t byteSize = htonl(uint32_t(msg.ByteSizeLong()));
-    std::string buffer(sizeof byteSize, '\0');
+    const uint32_t byteSize = htonl(uint32_t(msg.size()));
+    std::basic_string<uint8_t> buffer(sizeof byteSize, '\0');
     memcpy(buffer.data(), &byteSize, sizeof byteSize);
 
-    std::string contents;
-    msg.SerializeToString(&contents);
-
-    return conn.write(buffer + contents);
+    std::basic_string<uint8_t> contents;
+    contents.reserve(1024);
+    if (!msg.serialize(&buffer)) {
+        puts("Failed to serialize");
+        return false;
+    }
+    return conn.write(buffer);
 }
 namespace ns {
 enum Namespace {

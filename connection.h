@@ -79,7 +79,8 @@ struct Connection
         return true;
     }
 
-    bool write(const std::string &data) const {
+    template<typename T>
+    bool write(const std::basic_string<T> &data) const {
         return size_t(ssl::SSL_write(handle, data.data(), data.size())) == data.size();
     }
 

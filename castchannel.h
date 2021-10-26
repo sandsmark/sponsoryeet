@@ -58,21 +58,21 @@ public:
 protected:
     size_t size_content() override {
         return
-            size_varint(_protocol_version) +
+            size_var(id_protocol_version, _protocol_version, true) +
             size_str(id_source_id, _source_id.c_str()) +
             size_str(id_destination_id, _destination_id.c_str()) +
             size_str(id_namespace, _namespace.c_str()) +
-            size_varint(_payload_type) +
+            size_var(id_payload_type, _payload_type, true) +
             size_str(id_payload_utf8, _payload_utf8.c_str()) +
-            size_length_delimited(_payload_binary.size());
+            size_cls(id_payload_binary, _payload_binary.data(), _payload_binary.size());
     }
     bool out_content(std::basic_string<uint8_t> *pout) override {
         return
-            out_var(pout, id_protocol_version, _protocol_version) &&
+            out_var(pout, id_protocol_version, _protocol_version, true) &&
             out_str(pout, id_source_id, _source_id.c_str()) &&
             out_str(pout, id_destination_id, _destination_id.c_str()) +
             out_str(pout, id_namespace, _namespace.c_str()) &&
-            out_var(pout, id_payload_type, _payload_type) &&
+            out_var(pout, id_payload_type, _payload_type, true) &&
             out_str(pout, id_payload_utf8, _payload_utf8.c_str()) &&
             out_cls(pout, id_payload_binary, _payload_binary.data(), _payload_binary.size());
     }
