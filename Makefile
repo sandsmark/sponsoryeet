@@ -2,7 +2,7 @@ EXECUTABLE=sponsoryeet
 CXXFILES=$(wildcard *.cc)
 OBJECTS=$(patsubst %.cc, %.o, $(CXXFILES))
 LDFLAGS+=-ldl
-CXXFLAGS+=-Wall -Wextra -pedantic -std=c++17 -fPIC -g
+CXXFLAGS+=-Wall -Wextra -pedantic -std=c++17 -fPIC -g -Wno-variadic-macros
 
 all: $(EXECUTABLE)
 

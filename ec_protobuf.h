@@ -877,15 +877,24 @@ namespace ec
 		*/
 
 		virtual bool on_cls(uint32_t field_number, const void* pdata, size_t sizedata) {
+			(void)field_number;
+			(void)pdata;
+			(void)sizedata;
 			return true;
 		}
 		virtual bool on_var(uint32_t field_number, uint64_t val) {
+			(void)field_number;
+			(void)val;
 			return true;
 		}
 		virtual bool on_fix32(uint32_t field_number, const void* pval) {
+			(void)field_number;
+			(void)pval;
 			return true;
 		}
 		virtual bool on_fix64(uint32_t field_number, const void* pval) {
+			(void)field_number;
+			(void)pval;
 			return true;
 		}
 	};

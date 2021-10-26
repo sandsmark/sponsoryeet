@@ -31,7 +31,6 @@ inline bool extractNumber(const std::string &regex, const std::string &payload, 
 
 inline std::vector<std::string> stringSplit(const std::string &string, const char delimiter)
 {
-    char adf;
     std::vector<std::string> ret;
 
     std::string::size_type start = 0;

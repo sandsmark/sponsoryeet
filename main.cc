@@ -53,7 +53,7 @@ int main(int argc, char *argv[])
         if (arg == "-v" || arg == "--verbose") {
             s_verbose = true;
         } else if (arg == "--all-categories") {
-            for (const std::pair<std::string, std::string> &category : categories) {
+            for (const std::pair<const std::string, std::string> &category : categories) {
                 s_categories.insert(category.first.substr(2));
             }
         } else if (arg == "-a" || arg == "--adblock") {
@@ -63,7 +63,7 @@ int main(int argc, char *argv[])
         } else {
             printf("Usage: %s [-a|--adblock] [-v|--verbose] [--all-categories]\n", argv[0]);
             puts("You may also specify which categories you want to skip, defaults to just sponsors:");
-            for (const std::pair<std::string, std::string> &category : categories) {
+            for (const std::pair<const std::string, std::string> &category : categories) {
                 printf("  %s: %s\n", category.first.c_str(), category.second.c_str());
             }
             puts("\n--adblock is basically untested and might not work, hence not on by default");
