@@ -46,7 +46,6 @@ enum pb_type {
     pb_fixed32 = 5,  // 32-bit
 };
 
-static constexpr int pberr_sucess = 0;
 static constexpr int pberr_ok = 0;
 static constexpr int pberr_encode = 1;
 static constexpr int pberr_decode = 2;
@@ -60,8 +59,10 @@ see https://developers.google.com/protocol-buffers/docs/encoding
 class base_protobuf //base class for encode and decode protobuf
 {
 protected:
-    int _lasterr;
+    int _lasterr = pberr_ok;
 public:
+    virtual ~base_protobuf() = default;
+
     static inline bool isbig()
     {
 #if defined(__BYTE_ORDER) && __BYTE_ORDER == __BIG_ENDIAN
@@ -124,10 +125,6 @@ public:
         }
 
         return !nb;
-    }
-
-    base_protobuf() : _lasterr(0)
-    {
     }
 
     template<class _Tp
@@ -400,9 +397,6 @@ public:
 class msg_protoc3 : public base_protobuf
 {
 public:
-    msg_protoc3()
-    {
-    }
 
     bool p_bytes(uint32_t wire_type, const uint8_t *&pd, int &len, void *pout, size_t &outlen)
     {
@@ -682,13 +676,6 @@ public: //sizeof
 template<class _Out = std::basic_string<uint8_t>>
 class cls_protoc3 : public msg_protoc3
 {
-public:
-    cls_protoc3()
-    {
-    }
-    virtual ~cls_protoc3()
-    {
-    }
 public:
     static size_t cpstr(char *sout, size_t sizeout, const void *psrc, size_t sizesrc)
     {
