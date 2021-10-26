@@ -57,14 +57,21 @@ class base_protobuf //base class for encode and decode protobuf
 protected:
     int _lasterr;
 public:
-    inline bool isbig() const
+    static inline bool isbig()
     {
+#if defined(__BYTE_ORDER) && __BYTE_ORDER == __BIG_ENDIAN
+        return true;
+#elif defined(__BYTE_ORDER) && __BYTE_ORDER == __LITTLE_ENDIAN
+        return false;
+#else
+#warning Get a better compiler
         union {
             uint32_t u32;
             uint8_t u8;
         } ua;
         ua.u32 = 0x01020304;
         return ua.u8 == 0x01;
+#endif
     }
 
     inline int getlasterr()
