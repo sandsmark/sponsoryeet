@@ -33,21 +33,26 @@ You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2
 #include <byteswap.h>
 #endif
 #include <type_traits>
-#define pb_varint  0  // Varint
-#define pb_fixed64 1  // 64-bit
-#define pb_length_delimited  2  // Length-delimited
-#define pb_start_group  3 // deprecated not support
-#define pb_end_group  4   //deprecated not support
-#define pb_fixed32 5  // 32-bit
 
-#define pberr_sucess 0
-#define pberr_ok 0
-#define pberr_encode 1
-#define pberr_decode 2
-#define pberr_str_non_utf8 3
-#define pberr_memory  4
 
 namespace ec {
+
+enum pb_type {
+    pb_varint = 0,  // Varint
+    pb_fixed64 = 1,  // 64-bit
+    pb_length_delimited = 2,  // Length-delimited
+    pb_start_group = 3, // deprecated not support
+    pb_end_group = 4,   //deprecated not support
+    pb_fixed32 = 5,  // 32-bit
+};
+
+static constexpr int pberr_sucess = 0;
+static constexpr int pberr_ok = 0;
+static constexpr int pberr_encode = 1;
+static constexpr int pberr_decode = 2;
+static constexpr int pberr_str_non_utf8 = 3;
+static constexpr int pberr_memory =  4;
+
 /*!
 \brief encode and decode
 see https://developers.google.com/protocol-buffers/docs/encoding
