@@ -12,17 +12,16 @@ if (ENABLE_SANITIZERS)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=undefined")
 endif()
 
-find_package(OpenSSL REQUIRED)
-
 find_package(Protobuf REQUIRED)
 protobuf_generate_cpp(protobufs_SRC protobufs_HDR
     cast_channel.proto
     )
 add_executable(sponsoryeet
     main.cc
+    ssl.cc
     ${protobufs_SRC}
     ${protobufs_HDR}
     )
 
-target_link_libraries(sponsoryeet protobuf::libprotobuf OpenSSL::SSL)
+target_link_libraries(sponsoryeet protobuf::libprotobuf ${CMAKE_DL_LIBS})
 install(TARGETS sponsoryeet)

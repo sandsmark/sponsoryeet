@@ -24,6 +24,7 @@ extern "C" {
 #include "mdns.h"
 #include "chromecast.h"
 #include "loop.h"
+#include "ssl.h"
 
 
 void signalHandler(int sig)
@@ -35,6 +36,9 @@ void signalHandler(int sig)
 
 int main(int argc, char *argv[])
 {
+    if (!ssl::initialize()) {
+        return 1;
+    }
     static std::unordered_map<std::string, std::string> categories = {
         { "--sponsor", "Paid promotion, paid referrals and direct advertisements." },
         { "--selfpromo", "Unpaid or self promotion. Includes sections about merchandise, donations, or information about who they collaborated with." },

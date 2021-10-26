@@ -1,6 +1,7 @@
 #pragma once
 
 #include "globals.h"
+#include "ssl.h"
 
 #include <string>
 #include <iostream>
@@ -8,7 +9,7 @@
 
 extern "C" {
 #include <unistd.h>
-#include <openssl/ssl.h>
+//#include <openssl/ssl.h>
 #include <netdb.h>
 #include <netinet/tcp.h>
 #include <netinet/in.h>
@@ -21,26 +22,25 @@ extern "C" {
 struct Connection
 {
     // Chromecasts use self-signed certs
-    static int verify_callback(int, x509_store_ctx_st*) {
+    static int verify_callback(int, ssl::X509_STORE_CTX*) {
         return 1;
     }
 
     Connection()
     {
-        method = SSLv23_client_method();
-        SSLeay_add_ssl_algorithms();
-        ctx = SSL_CTX_new(method);
+        method = ssl::TLS_client_method();
+        ctx = ssl::SSL_CTX_new(method);
         assert(ctx != nullptr);
-        SSL_CTX_set_verify(ctx, SSL_VERIFY_NONE, verify_callback);
-        handle = SSL_new(ctx);
+        ssl::SSL_CTX_set_verify(ctx, ssl::SSL_VERIFY_NONE, verify_callback);
+        handle = ssl::SSL_new(ctx);
     }
 
     ~Connection() {
         if (handle) {
-            SSL_free(handle);
+            ssl::SSL_free(handle);
         }
         if (ctx) {
-            SSL_CTX_free(ctx);
+            ssl::SSL_CTX_free(ctx);
         }
         if (fd > 0) {
             close(fd);
@@ -69,10 +69,10 @@ struct Connection
         }
 
         // Do ssl connection
-        SSL_set_fd(handle, fd);
-        ret = SSL_connect(handle);
+        ssl::SSL_set_fd(handle, fd);
+        ret = ssl::SSL_connect(handle);
         if (ret != 1) {
-            fprintf(stderr, "SSL error: %d\n", SSL_get_error(handle, ret));
+            fprintf(stderr, "SSL error: %d\n", ssl::SSL_get_error(handle, ret));
             return false;
         }
 
@@ -80,14 +80,14 @@ struct Connection
     }
 
     bool write(const std::string &data) const {
-        return size_t(SSL_write(handle, data.data(), data.size())) == data.size();
+        return size_t(ssl::SSL_write(handle, data.data(), data.size())) == data.size();
     }
 
     std::string read(int size) {
         std::string buffer(size, '\0');
-        int amount = SSL_read(handle, buffer.data(), buffer.size());
+        int amount = ssl::SSL_read(handle, buffer.data(), buffer.size());
         if (amount < 0) {
-            fprintf(stderr, "SSL read error: %d\n", SSL_get_error(handle, amount));
+            fprintf(stderr, "SSL read error: %d\n", ssl::SSL_get_error(handle, amount));
             return "";
         }
         if (amount == 0) {
@@ -99,9 +99,9 @@ struct Connection
     }
 
     bool eof = false;
-    const SSL_METHOD *method = nullptr;
-    SSL_CTX *ctx = nullptr;
-    SSL *handle = nullptr;
+    const ssl::SSL_METHOD *method = nullptr;
+    ssl::SSL_CTX *ctx = nullptr;
+    ssl::SSL *handle = nullptr;
     int fd = -1;
 };
 

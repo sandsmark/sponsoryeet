@@ -16,13 +16,16 @@ Dependencies
 ------------
 
  * C++ compiler
- * OpenSSL
  * protobuf
+ * OpenSSL or GnuTLS (only runtime, not to compile)
 
 Has a simple HTTP implementation, mdns implementation and uses c++11 regexes
 for parsing the json, so no more deps.
 
 Could implement protobuf myself as well, but meh.
+
+It looks up a suitable SSL implementation when running, so e. g. if you cross
+compile for a raspberry pi you only need it available on the raspberry pi.
 
 
 Building
