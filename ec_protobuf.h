@@ -753,7 +753,7 @@ public:
     {
         size_t zu = 0;
 
-        for (auto &i : vs) {
+        for (const _OBJ &i : vs) {
             zu += i.size(objid);
         }
 
@@ -763,7 +763,7 @@ public:
     template<class _OBJ>
     bool out_obj_array(_Out *pout, int objid, std::vector<_OBJ> &vs)
     {
-        for (auto &i : vs) {
+        for (const _OBJ &i : vs) {
             if (!i.serialize(objid, pout)) {
                 return false;
             }
@@ -892,7 +892,7 @@ public:
         out_key(id, pb_length_delimited, pout);
         out_varint(zbody, pout);
 
-        for (auto i = 0u; i < items; i++) {
+        for (unsigned int i = 0u; i < items; i++) {
             if (zigzag) {
                 t_zigzag<_Tp> zg;
 
@@ -919,7 +919,7 @@ public:
 
         size_t zn = 0;
 
-        for (auto i = 0u; i < items; i++) {
+        for (unsigned int i = 0u; i < items; i++) {
             if (zigzag) {
                 zn += size_varint(t_zigzag<_Tp>().encode(pdata[i]));
             } else {
@@ -941,7 +941,7 @@ public:
 
         size_t zn = 0;
 
-        for (auto i = 0u; i < items; i++) {
+        for (unsigned int i = 0u; i < items; i++) {
             if (zigzag) {
                 zn += size_varint(t_zigzag<_Tp>().encode(pdata[i]));
             } else {
@@ -976,7 +976,7 @@ public:
         out_key(id, pb_length_delimited, pout);
         out_varint(zbody, pout);
 
-        for (auto i = 0u; i < items; i++) {
+        for (unsigned int i = 0u; i < items; i++) {
             base_protobuf::out_fixed32(pdata[i], pout);
         }
 
@@ -1006,7 +1006,7 @@ public:
         out_key(id, pb_length_delimited, pout);
         out_varint(zbody, pout);
 
-        for (auto i = 0u; i < items; i++) {
+        for (unsigned int i = 0u; i < items; i++) {
             base_protobuf::out_fixed64(pdata[i], pout);
         }
 
