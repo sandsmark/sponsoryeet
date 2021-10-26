@@ -1,3 +1,5 @@
+#pragma once
+
 #include "ec_protobuf.h"
 
 // message CastMessage {

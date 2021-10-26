@@ -3,6 +3,7 @@
 #include <iostream>
 #include "globals.h"
 #include "chromecast.h"
+#include "castchannel.h"
 
 static double currentPosition()
 {
@@ -161,20 +162,20 @@ static void printProgress(double position, double length)
 
 static bool handleMessage(Connection *connection, const std::string &inputBuffer)
 {
-    cast_channel::CastMessage message;
-    if (!message.ParseFromString(inputBuffer)) {
-        puts("PArsing failed");
+    CastMessage message;
+    if (!message.parse(inputBuffer.data(), inputBuffer.size())) {
+        puts("Parsing message from chromecast failed");
         return false;
     }
 
-    if (!message.has_payload_utf8()) {
+    const std::string payload = message._payload_utf8;
+    if (payload.empty()) {
         puts("No string payload");
         return true;
     }
-    const std::string payload = message.payload_utf8();
     std::string type = regexExtract(R"--("type"\s*:\s*"([^"]+)")--", payload);
     if (type != "PING" && s_verbose) {
-        std::cout << message.source_id() << " > " << message.destination_id() << " (" << message.namespace_() << "): \n" << message.payload_utf8() << std::endl;
+        std::cout << message._source_id << " > " << message._destination_id << " (" << message._namespace << "): \n" << payload << std::endl;
     }
 
     if (type == "CLOSE") {
@@ -184,7 +185,7 @@ static bool handleMessage(Connection *connection, const std::string &inputBuffer
     }
     if (type == "INVALID_REQUEST") {
         s_currentStatus = "Error";
-        std::cout << message.source_id() << " > " << message.destination_id() << " (" << message.namespace_() << "): \n" << message.payload_utf8() << std::endl;
+        std::cout << message._source_id << " > " << message._destination_id << " (" << message._namespace << "): \n" << payload << std::endl;
         return false;
     }
 
@@ -250,13 +251,13 @@ static bool handleMessage(Connection *connection, const std::string &inputBuffer
         return true;
     }
 
-    if (message.namespace_() == cc::ns::strings[cc::ns::Heartbeat]) {
+    if (message._namespace == cc::ns::strings[cc::ns::Heartbeat]) {
         if (type == "PING") {
             cc::sendSimple(*connection, cc::msg::Pong, cc::ns::Heartbeat);
         }
         return true;
     }
-    if (message.namespace_() == cc::ns::strings[cc::ns::Receiver]) {
+    if (message._namespace == cc::ns::strings[cc::ns::Receiver]) {
         if (type == "RECEIVER_STATUS") {
             const std::string displayName = regexExtract(R"--("displayName"\s*:\s*"([^"]+)")--", payload);
             const std::string sessionId = regexExtract(R"--("sessionId"\s*:\s*"([^"]+)")--", payload);

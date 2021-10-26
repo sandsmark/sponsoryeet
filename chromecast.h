@@ -3,6 +3,7 @@
 #include "globals.h"
 #include "connection.h"
 #include "cast_channel.pb.h"
+#include "castchannel.h"
 
 namespace cc
 {
